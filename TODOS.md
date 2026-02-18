@@ -152,17 +152,17 @@ loads them from `/media/`.
 
 ## Phase 6 — Playlist Management API
 
-- [ ] `GET  /api/v1/playlists` — list playlists (id, name, is_default, item count)
-- [ ] `POST /api/v1/playlists` — create playlist `{ "name": "..." }`
-- [ ] `GET  /api/v1/playlists/{id}` — get playlist with full ordered item list
-- [ ] `PUT  /api/v1/playlists/{id}/items` — replace item list
+- [x] `GET  /api/v1/playlists` — list playlists (id, name, is_default, item count)
+- [x] `POST /api/v1/playlists` — create playlist `{ "name": "..." }`
+- [x] `GET  /api/v1/playlists/{id}` — get playlist with full ordered item list
+- [x] `PUT  /api/v1/playlists/{id}/items` — replace item list
   ```json
   [{ "content_id": "...", "duration_override_s": null }, ...]
   ```
-- [ ] `DELETE /api/v1/playlists/{id}` — delete (prevent deleting the last playlist)
-- [ ] `POST /api/v1/playlists/{id}/activate` — set as default (deactivates previous)
-- [ ] Auto-create a default playlist named "Default" on first run
-- [ ] After any change: `scheduler.TriggerReload()` + broadcast WebSocket `current`
+- [x] `DELETE /api/v1/playlists/{id}` — delete (prevent deleting the last playlist)
+- [x] `POST /api/v1/playlists/{id}/activate` — set as default (deactivates previous)
+- [x] Auto-create a default playlist named "Default" on first run (migration 3)
+- [x] After any change: `scheduler.TriggerReload()` + broadcast WebSocket `current`
 
 ---
 

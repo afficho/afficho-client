@@ -460,29 +460,338 @@ func (s *Server) handleStorageStatus(w http.ResponseWriter, r *http.Request) {
 
 // ── Playlists ─────────────────────────────────────────────────────────────────
 
-// TODO: Implement full playlist CRUD
+type playlistSummary struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	IsDefault bool   `json:"is_default"`
+	ItemCount int    `json:"item_count"`
+	CreatedAt string `json:"created_at"`
+}
+
+type playlistDetail struct {
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	IsDefault bool           `json:"is_default"`
+	CreatedAt string         `json:"created_at"`
+	Items     []playlistItem `json:"items"`
+}
+
+type playlistItem struct {
+	ID                string `json:"id"`
+	ContentID         string `json:"content_id"`
+	ContentName       string `json:"content_name"`
+	ContentType       string `json:"content_type"`
+	Position          int    `json:"position"`
+	DurationOverrideS *int   `json:"duration_override_s"`
+}
+
 func (s *Server) listPlaylists(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	rows, err := s.db.Query(`
+		SELECT p.id, p.name, p.is_default, p.created_at, COUNT(pi.id)
+		FROM playlists p
+		LEFT JOIN playlist_items pi ON pi.playlist_id = p.id
+		GROUP BY p.id
+		ORDER BY p.created_at ASC`)
+	if err != nil {
+		slog.Error("listing playlists", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	items := make([]playlistSummary, 0)
+	for rows.Next() {
+		var p playlistSummary
+		var def int
+		if err := rows.Scan(&p.ID, &p.Name, &def, &p.CreatedAt, &p.ItemCount); err != nil {
+			slog.Error("scanning playlist row", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		p.IsDefault = def != 0
+		items = append(items, p)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("iterating playlist rows", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	respond(w, http.StatusOK, items)
 }
 
 func (s *Server) createPlaylist(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+
+	id := uuid.New().String()
+	_, err := s.db.Exec(`INSERT INTO playlists (id, name, is_default) VALUES (?, ?, 0)`, id, req.Name)
+	if err != nil {
+		slog.Error("creating playlist", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	p, err := s.fetchPlaylistSummary(id)
+	if err != nil {
+		slog.Error("fetching created playlist", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	s.scheduler.TriggerReload()
+	s.BroadcastCurrent()
+	respond(w, http.StatusCreated, p)
 }
 
 func (s *Server) getPlaylist(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	id := chi.URLParam(r, "id")
+	p, err := s.fetchPlaylistDetail(id)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		slog.Error("getting playlist", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	respond(w, http.StatusOK, p)
 }
 
 func (s *Server) setPlaylistItems(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	id := chi.URLParam(r, "id")
+
+	// Verify playlist exists.
+	var exists int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM playlists WHERE id = ?`, id).Scan(&exists); err != nil {
+		slog.Error("checking playlist", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if exists == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	var items []struct {
+		ContentID         string `json:"content_id"`
+		DurationOverrideS *int   `json:"duration_override_s"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
+		http.Error(w, "invalid JSON body: expected array of items", http.StatusBadRequest)
+		return
+	}
+
+	// Validate all content IDs exist.
+	for _, item := range items {
+		var found int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM content_items WHERE id = ?`, item.ContentID).Scan(&found); err != nil {
+			slog.Error("checking content_id", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if found == 0 {
+			http.Error(w, "content_id not found: "+item.ContentID, http.StatusBadRequest)
+			return
+		}
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		slog.Error("beginning transaction", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := tx.Exec(`DELETE FROM playlist_items WHERE playlist_id = ?`, id); err != nil {
+		_ = tx.Rollback()
+		slog.Error("clearing playlist items", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	for i, item := range items {
+		piID := uuid.New().String()
+		_, err := tx.Exec(`
+			INSERT INTO playlist_items (id, playlist_id, content_id, position, duration_override_s)
+			VALUES (?, ?, ?, ?, ?)`,
+			piID, id, item.ContentID, i, item.DurationOverrideS,
+		)
+		if err != nil {
+			_ = tx.Rollback()
+			slog.Error("inserting playlist item", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		slog.Error("committing playlist items", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	p, err := s.fetchPlaylistDetail(id)
+	if err != nil {
+		slog.Error("fetching updated playlist", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	s.scheduler.TriggerReload()
+	s.BroadcastCurrent()
+	respond(w, http.StatusOK, p)
 }
 
 func (s *Server) deletePlaylist(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	id := chi.URLParam(r, "id")
+
+	var name string
+	var isDefault int
+	err := s.db.QueryRow(`SELECT name, is_default FROM playlists WHERE id = ?`, id).Scan(&name, &isDefault)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		slog.Error("fetching playlist for delete", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if isDefault != 0 {
+		http.Error(w, "cannot delete the default playlist", http.StatusBadRequest)
+		return
+	}
+
+	var total int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM playlists`).Scan(&total); err != nil {
+		slog.Error("counting playlists", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if total <= 1 {
+		http.Error(w, "cannot delete the last playlist", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := s.db.Exec(`DELETE FROM playlists WHERE id = ?`, id); err != nil {
+		slog.Error("deleting playlist", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	s.scheduler.TriggerReload()
+	s.BroadcastCurrent()
+	respond(w, http.StatusNoContent, nil)
 }
 
 func (s *Server) activatePlaylist(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	id := chi.URLParam(r, "id")
+
+	var exists int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM playlists WHERE id = ?`, id).Scan(&exists); err != nil {
+		slog.Error("checking playlist", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if exists == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		slog.Error("beginning transaction", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := tx.Exec(`UPDATE playlists SET is_default = 0 WHERE is_default = 1`); err != nil {
+		_ = tx.Rollback()
+		slog.Error("deactivating current playlist", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if _, err := tx.Exec(`UPDATE playlists SET is_default = 1 WHERE id = ?`, id); err != nil {
+		_ = tx.Rollback()
+		slog.Error("activating playlist", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		slog.Error("committing playlist activation", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	p, err := s.fetchPlaylistDetail(id)
+	if err != nil {
+		slog.Error("fetching activated playlist", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	s.scheduler.TriggerReload()
+	s.BroadcastCurrent()
+	respond(w, http.StatusOK, p)
+}
+
+// fetchPlaylistSummary loads a playlist with its item count.
+func (s *Server) fetchPlaylistSummary(id string) (playlistSummary, error) {
+	var p playlistSummary
+	var def int
+	err := s.db.QueryRow(`
+		SELECT p.id, p.name, p.is_default, p.created_at, COUNT(pi.id)
+		FROM playlists p
+		LEFT JOIN playlist_items pi ON pi.playlist_id = p.id
+		WHERE p.id = ?
+		GROUP BY p.id`, id).Scan(&p.ID, &p.Name, &def, &p.CreatedAt, &p.ItemCount)
+	p.IsDefault = def != 0
+	return p, err
+}
+
+// fetchPlaylistDetail loads a playlist with its ordered items.
+func (s *Server) fetchPlaylistDetail(id string) (playlistDetail, error) {
+	var p playlistDetail
+	var def int
+	err := s.db.QueryRow(`SELECT id, name, is_default, created_at FROM playlists WHERE id = ?`, id).
+		Scan(&p.ID, &p.Name, &def, &p.CreatedAt)
+	if err != nil {
+		return p, err
+	}
+	p.IsDefault = def != 0
+
+	rows, err := s.db.Query(`
+		SELECT pi.id, pi.content_id, ci.name, ci.type, pi.position, pi.duration_override_s
+		FROM playlist_items pi
+		JOIN content_items ci ON ci.id = pi.content_id
+		WHERE pi.playlist_id = ?
+		ORDER BY pi.position ASC`, id)
+	if err != nil {
+		return p, err
+	}
+	defer rows.Close()
+
+	p.Items = make([]playlistItem, 0)
+	for rows.Next() {
+		var item playlistItem
+		if err := rows.Scan(&item.ID, &item.ContentID, &item.ContentName, &item.ContentType, &item.Position, &item.DurationOverrideS); err != nil {
+			return p, err
+		}
+		p.Items = append(p.Items, item)
+	}
+	return p, rows.Err()
 }
 
 // ── Admin UI ──────────────────────────────────────────────────────────────────
