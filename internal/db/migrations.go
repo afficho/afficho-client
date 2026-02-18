@@ -62,6 +62,11 @@ CREATE UNIQUE INDEX uq_default_playlist
     ON playlists(is_default) WHERE is_default = 1;
 `,
 	},
+	{
+		version:     2,
+		description: "add allow_popups to content_items",
+		sql:         `ALTER TABLE content_items ADD COLUMN allow_popups INTEGER NOT NULL DEFAULT 0;`,
+	},
 }
 
 // migrate applies all pending migrations in order. It creates the

@@ -12,11 +12,12 @@ import (
 
 // Item represents a single content item in the active playback queue.
 type Item struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`   // "image" | "video" | "url" | "html"
-	Source    string `json:"source"` // local /media/... path or external URL
-	DurationS int    `json:"duration_s"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`   // "image" | "video" | "url" | "html"
+	Source      string `json:"source"` // local /media/... path or external URL
+	DurationS   int    `json:"duration_s"`
+	AllowPopups bool   `json:"allow_popups"` // add allow-popups to iframe sandbox
 }
 
 // Scheduler manages the active playlist and tracks the current playback position.
@@ -152,7 +153,8 @@ func (s *Scheduler) loadDefaultPlaylist() ([]Item, error) {
 			ci.name,
 			ci.type,
 			ci.source,
-			COALESCE(pi.duration_override_s, ci.duration_s) AS duration_s
+			COALESCE(pi.duration_override_s, ci.duration_s) AS duration_s,
+			ci.allow_popups
 		FROM playlists p
 		JOIN playlist_items pi ON pi.playlist_id = p.id
 		JOIN content_items  ci ON ci.id = pi.content_id
@@ -167,9 +169,11 @@ func (s *Scheduler) loadDefaultPlaylist() ([]Item, error) {
 	var items []Item
 	for rows.Next() {
 		var it Item
-		if err := rows.Scan(&it.ID, &it.Name, &it.Type, &it.Source, &it.DurationS); err != nil {
+		var popups int
+		if err := rows.Scan(&it.ID, &it.Name, &it.Type, &it.Source, &it.DurationS, &popups); err != nil {
 			return nil, err
 		}
+		it.AllowPopups = popups != 0
 		items = append(items, it)
 	}
 	return items, rows.Err()

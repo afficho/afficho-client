@@ -1,9 +1,13 @@
 package api
 
 import (
+	"database/sql"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 )
 
 //go:embed display.html
@@ -26,4 +30,36 @@ func (s *Server) handleDisplayCurrent(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(item)
+}
+
+// handleDisplayAdvance advances the scheduler to the next item. Unauthenticated
+// because the display page calls it when a video finishes before the duration timer.
+func (s *Server) handleDisplayAdvance(w http.ResponseWriter, r *http.Request) {
+	s.scheduler.Advance()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleContentRender serves inline HTML content items for iframe embedding.
+// Unauthenticated — the display page needs to load these.
+func (s *Server) handleContentRender(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var contentType, source string
+	err := s.db.QueryRow(`SELECT type, source FROM content_items WHERE id = ?`, id).Scan(&contentType, &source)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if contentType != "html" {
+		http.Error(w, "not an HTML content item", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(source))
 }

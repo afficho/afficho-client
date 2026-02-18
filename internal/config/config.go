@@ -39,8 +39,9 @@ type DisplayConfig struct {
 }
 
 type StorageConfig struct {
-	DataDir    string `toml:"data_dir"`
-	MaxCacheGB int    `toml:"max_cache_gb"`
+	DataDir     string `toml:"data_dir"`
+	MaxCacheGB  int    `toml:"max_cache_gb"`
+	MaxUploadMB int    `toml:"max_upload_mb"`
 }
 
 type CloudConfig struct {
@@ -67,8 +68,9 @@ func Default() *Config {
 			DisplayEnv:    ":0",
 		},
 		Storage: StorageConfig{
-			DataDir:    "/var/lib/afficho",
-			MaxCacheGB: 10,
+			DataDir:     "/var/lib/afficho",
+			MaxCacheGB:  10,
+			MaxUploadMB: 100,
 		},
 	}
 }

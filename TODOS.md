@@ -93,25 +93,25 @@ First content type: web pages rendered in a full-screen iframe. This covers the
 most common digital signage use case (dashboards, live websites, internal portals).
 
 ### REST endpoints
-- [ ] `GET  /api/v1/content` — list all items (id, name, type, url, duration_s, created_at)
-- [ ] `POST /api/v1/content` — add a URL content item
+- [x] `GET  /api/v1/content` — list all items (id, name, type, url, duration_s, created_at)
+- [x] `POST /api/v1/content` — add a URL content item
   ```json
   { "name": "...", "type": "url", "url": "https://...", "duration_s": 30 }
   ```
-- [ ] `GET    /api/v1/content/{id}` — get single item
-- [ ] `PATCH  /api/v1/content/{id}` — update name / url / duration
-- [ ] `DELETE /api/v1/content/{id}` — remove item (also removes from all playlists)
-- [ ] After any write: call `scheduler.TriggerReload()` + broadcast WebSocket `current`
+- [x] `GET    /api/v1/content/{id}` — get single item
+- [x] `PATCH  /api/v1/content/{id}` — update name / url / duration
+- [x] `DELETE /api/v1/content/{id}` — remove item (also removes from all playlists)
+- [x] After any write: call `scheduler.TriggerReload()` + broadcast WebSocket `current`
 
 ### Validation
-- [ ] Require `https://` or `http://` scheme
-- [ ] Reject obviously invalid URLs (use `url.Parse`)
-- [ ] `duration_s` must be > 0
+- [x] Require `https://` or `http://` scheme
+- [x] Reject obviously invalid URLs (use `url.Parse`)
+- [x] `duration_s` must be > 0
 
 ### iframe sandboxing
-- [ ] Default sandbox: `allow-scripts allow-same-origin allow-forms`
-- [ ] Per-item `allow_popups` flag for content that needs it
-- [ ] Document known limitations (X-Frame-Options, CSP on external sites)
+- [x] Default sandbox: `allow-scripts allow-same-origin allow-forms`
+- [x] Per-item `allow_popups` flag for content that needs it
+- [x] Document known limitations (X-Frame-Options, CSP on external sites)
 
 ---
 
@@ -121,32 +121,32 @@ Images and video are stored locally. The daemon downloads them on add; Chromium
 loads them from `/media/`.
 
 ### Images
-- [ ] `POST /api/v1/content` with `type: "image"`:
+- [x] `POST /api/v1/content` with `type: "image"`:
   - Accept external URL → download to `data/media/{id}.{ext}`
   - Accept multipart file upload
-- [ ] Accepted MIME types: `image/jpeg`, `image/png`, `image/gif`, `image/webp`
-- [ ] Validate magic bytes (not just Content-Type / extension)
-- [ ] Reject files > configurable size limit (`storage.max_upload_mb`)
-- [ ] Store `size_bytes` in DB
+- [x] Accepted MIME types: `image/jpeg`, `image/png`, `image/gif`, `image/webp`
+- [x] Validate magic bytes (not just Content-Type / extension)
+- [x] Reject files > configurable size limit (`storage.max_upload_mb`)
+- [x] Store `size_bytes` in DB
 
 ### Video
-- [ ] `POST /api/v1/content` with `type: "video"`:
+- [x] `POST /api/v1/content` with `type: "video"`:
   - Accept external URL → download
   - Accept multipart upload
-- [ ] Accepted MIME types: `video/mp4`, `video/webm`
-- [ ] Validate magic bytes
-- [ ] Display page: advance on `video.ended` event (before duration timer)
-- [ ] Display page: `autoplay`, `muted`, `playsinline` attributes
+- [x] Accepted MIME types: `video/mp4`, `video/webm`
+- [x] Validate magic bytes
+- [x] Display page: advance on `video.ended` event (before duration timer)
+- [x] Display page: `autoplay`, `muted`, `playsinline` attributes
 
 ### Storage management
-- [ ] Track total media size; expose in `GET /api/v1/storage`
+- [x] Track total media size; expose in `GET /api/v1/storage`
 - [ ] Cache eviction when `storage.max_cache_gb` is exceeded (LRU — delete items
   not in any active playlist first, then oldest by last-played)
 
 ### Content type: inline HTML
-- [ ] `type: "html"` — store an HTML string in the DB, serve it as a `data:` URL
-  or a local route `/content/{id}/render` and iframe it
-- [ ] Use case: custom slides built with a future editor
+- [x] `type: "html"` — store an HTML string in the DB, serve it via
+  `/content/{id}/render` and iframe it
+- [x] Use case: custom slides built with a future editor
 
 ---
 

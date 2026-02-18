@@ -212,16 +212,17 @@
           el.autoplay = true;
           el.muted = true;
           el.loop = false;
+          el.playsInline = true;
           el.addEventListener('ended', () => {
-            // Let the server advance; if using polling fallback, tick early.
-            if (!wsConnected) tick();
+            fetch('/display/advance', { method: 'POST' });
           });
           break;
         case 'url':
         case 'html':
           el = document.createElement('iframe');
           el.src = item.source;
-          el.sandbox = 'allow-scripts allow-same-origin allow-forms';
+          el.sandbox = 'allow-scripts allow-same-origin allow-forms'
+            + (item.allow_popups ? ' allow-popups' : '');
           break;
         default:
           showSplash('Unknown content type: ' + item.type);

@@ -36,6 +36,9 @@ data_dir = "./data"
 # Maximum disk space for cached media (gigabytes).
 max_cache_gb = 10
 
+# Maximum file size for a single upload (megabytes).
+max_upload_mb = 100
+
 [cloud]
 # Afficho Cloud sync (not yet implemented).
 enabled = false

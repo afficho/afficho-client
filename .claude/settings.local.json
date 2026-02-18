@@ -4,7 +4,11 @@
       "Bash(make build:*)",
       "Bash(go vet:*)",
       "Bash(make lint:*)",
-      "Bash(gofmt:*)"
+      "Bash(gofmt:*)",
+      "Bash(go mod tidy:*)",
+      "Bash(make build-all:*)",
+      "Bash(go build:*)",
+      "Bash(make test:*)"
     ]
   }
 }

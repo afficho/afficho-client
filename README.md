@@ -144,6 +144,20 @@ The daemon exposes a REST API at `/api/v1`. All responses are JSON.
 | `url` | External web page rendered in an iframe |
 | `html` | Inline HTML snippet |
 
+### iframe sandboxing (URL / HTML content)
+
+Web pages are rendered inside an `<iframe>` with the sandbox policy
+`allow-scripts allow-same-origin allow-forms`. This prevents embedded content
+from navigating the top-level page or accessing browser APIs it shouldn't.
+
+Per-item opt-in: set `"allow_popups": true` on a content item to also grant the
+`allow-popups` sandbox token (needed for sites that open links in new tabs).
+
+**Known limitations:** Some external sites block embedding via the
+`X-Frame-Options` header or `Content-Security-Policy: frame-ancestors` directive.
+These restrictions are enforced by the browser and cannot be bypassed client-side.
+If a URL shows a blank iframe, check the site's response headers.
+
 ## Development
 
 ### Dev Container (recommended)

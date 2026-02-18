@@ -59,7 +59,11 @@ func (s *Server) routes() {
 	// without credentials.
 	r.Get("/display", s.handleDisplay)
 	r.Get("/display/current", s.handleDisplayCurrent)
+	r.Post("/display/advance", s.handleDisplayAdvance)
 	r.Get("/ws/display", s.handleDisplayWS)
+
+	// Inline HTML content renderer (iframed by the display page).
+	r.Get("/content/{id}/render", s.handleContentRender)
 
 	// Static media files.
 	r.Handle("/media/*", http.StripPrefix("/media/",
@@ -99,6 +103,7 @@ func (s *Server) routes() {
 				r.Post("/{id}/activate", s.activatePlaylist)
 			})
 
+			r.Get("/storage", s.handleStorageStatus)
 			r.Get("/scheduler/status", s.handleSchedulerStatus)
 			r.Post("/scheduler/next", s.handleSchedulerNext)
 		})
