@@ -79,12 +79,42 @@ All settings live in a TOML config file. See [`config.example.toml`](./config.ex
 | Setting | Default | Description |
 |---|---|---|
 | `server.port` | `8080` | HTTP listen port |
+| `admin.password` | `""` (empty) | Admin password (empty = auth disabled) |
 | `display.launch_browser` | `true` | Auto-launch Chromium on startup |
 | `display.browser` | `chromium-browser` | Browser executable name |
 | `storage.data_dir` | `/var/lib/afficho` | Database and media storage path |
 | `storage.max_cache_gb` | `10` | Maximum media cache size |
 | `cloud.enabled` | `false` | Enable Afficho Cloud sync |
 | `logging.debug` | `false` | Verbose logging |
+
+## Authentication
+
+The Community Edition uses a single admin password set in the config file.
+
+```toml
+[admin]
+password = "your-secret-password"
+```
+
+When a password is set:
+
+- `/admin`, `/admin/*`, and all `/api/v1` write endpoints require authentication
+- The browser prompts for credentials via HTTP Basic Auth
+- After login a signed session cookie (`afficho_session`, 24h) avoids re-prompting
+- Changing the password in the config invalidates all existing sessions
+
+These routes remain **unauthenticated** (Chromium on the device needs them):
+
+- `/display`, `/display/current` — display renderer
+- `/media/*` — static media files
+- `GET /api/v1/status` — read-only status (useful for monitoring)
+
+When the password is empty (the default), authentication is disabled entirely.
+
+> **Security note:** The CE password protects against casual access on a local
+> network. Do not expose port 8080 to the internet without a reverse proxy
+> (nginx, Caddy) providing TLS. Enterprise authentication (SSO, RBAC) is
+> handled by the Afficho Cloud web console, not by this daemon.
 
 ## API
 

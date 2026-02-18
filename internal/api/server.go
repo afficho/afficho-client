@@ -47,55 +47,54 @@ func (s *Server) routes() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// ── Display renderer (loaded by Chromium) ────────────────────────────
-	// These routes are intentionally unauthenticated — Chromium on the same
-	// device needs to reach them without credentials.
+	// ── Unauthenticated routes ───────────────────────────────────────────
+	// Display renderer — Chromium on the local device must reach these
+	// without credentials.
 	r.Get("/display", s.handleDisplay)
 	r.Get("/display/current", s.handleDisplayCurrent)
-	// TODO: WebSocket endpoint for push-based display control
-	//   r.Get("/ws/display", s.handleDisplayWS)
-	//   Messages: { type: "next" | "reload" | "alert", payload: ... }
-	//   This enables: instant transitions, emergency alerts, live ticket queues, etc.
 
-	// ── Admin UI ─────────────────────────────────────────────────────────
-	// TODO: wrap these routes with requireAuth() middleware
-	//   CE: HTTP Basic Auth with password from config.Admin.Password
-	//   EE: handled upstream by Afficho Cloud web console (SSO/RBAC)
-	r.Get("/", http.RedirectHandler("/admin", http.StatusFound).ServeHTTP)
-	r.Get("/admin", s.handleAdmin)
-	r.Get("/admin/*", s.handleAdmin)
-
-	// ── REST API ─────────────────────────────────────────────────────────
-	// TODO: apply requireAuth() to this entire route group
-	r.Route("/api/v1", func(r chi.Router) {
-		r.Get("/status", s.handleStatus)
-
-		r.Route("/content", func(r chi.Router) {
-			r.Get("/", s.listContent)
-			r.Post("/", s.createContent)      // add by URL or upload
-			r.Get("/{id}", s.getContent)      // TODO: implement in Phase 4
-			r.Patch("/{id}", s.updateContent) // TODO: implement in Phase 4
-			r.Delete("/{id}", s.deleteContent)
-		})
-
-		r.Route("/playlists", func(r chi.Router) {
-			r.Get("/", s.listPlaylists)
-			r.Post("/", s.createPlaylist)
-			r.Get("/{id}", s.getPlaylist)
-			r.Put("/{id}/items", s.setPlaylistItems) // replace ordered item list
-			r.Delete("/{id}", s.deletePlaylist)
-			r.Post("/{id}/activate", s.activatePlaylist) // set as default
-		})
-
-		r.Get("/scheduler/status", s.handleSchedulerStatus)
-		r.Post("/scheduler/next", s.handleSchedulerNext) // force advance (for testing)
-	})
-
-	// ── Static media files ───────────────────────────────────────────────
-	// Served from the local media storage directory.
+	// Static media files.
 	r.Handle("/media/*", http.StripPrefix("/media/",
 		http.FileServer(http.Dir(s.content.MediaDir())),
 	))
+
+	// Read-only status endpoint (useful for monitoring / health checks).
+	r.Get("/api/v1/status", s.handleStatus)
+
+	// ── Authenticated routes ─────────────────────────────────────────────
+	// Protected by requireAuth: skipped when admin password is empty,
+	// otherwise HTTP Basic Auth + session cookie.
+	r.Group(func(r chi.Router) {
+		r.Use(s.requireAuth)
+
+		// Admin UI
+		r.Get("/", http.RedirectHandler("/admin", http.StatusFound).ServeHTTP)
+		r.Get("/admin", s.handleAdmin)
+		r.Get("/admin/*", s.handleAdmin)
+
+		// REST API
+		r.Route("/api/v1", func(r chi.Router) {
+			r.Route("/content", func(r chi.Router) {
+				r.Get("/", s.listContent)
+				r.Post("/", s.createContent)
+				r.Get("/{id}", s.getContent)
+				r.Patch("/{id}", s.updateContent)
+				r.Delete("/{id}", s.deleteContent)
+			})
+
+			r.Route("/playlists", func(r chi.Router) {
+				r.Get("/", s.listPlaylists)
+				r.Post("/", s.createPlaylist)
+				r.Get("/{id}", s.getPlaylist)
+				r.Put("/{id}/items", s.setPlaylistItems)
+				r.Delete("/{id}", s.deletePlaylist)
+				r.Post("/{id}/activate", s.activatePlaylist)
+			})
+
+			r.Get("/scheduler/status", s.handleSchedulerStatus)
+			r.Post("/scheduler/next", s.handleSchedulerNext)
+		})
+	})
 
 	s.mux = r
 }

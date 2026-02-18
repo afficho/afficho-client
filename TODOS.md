@@ -44,17 +44,17 @@ Tracks all pending work. Update this file as features land.
 Simple single-password protection for the admin UI and all write API endpoints.
 EE authentication (SSO, RBAC) lives in the Afficho Cloud web console, not here.
 
-- [ ] `requireAuth()` chi middleware using HTTP Basic Auth
+- [x] `requireAuth()` chi middleware using HTTP Basic Auth
   - Check `config.Admin.Password`; skip auth entirely if password is empty
   - Unauthenticated requests: return `401` with `WWW-Authenticate: Basic` header
-- [ ] Apply `requireAuth()` to `/admin`, `/admin/*`, and all `/api/v1` write routes
+- [x] Apply `requireAuth()` to `/admin`, `/admin/*`, and all `/api/v1` write routes
   - `/display`, `/display/current`, `/ws/display`, and `/media/*` stay unauthenticated
     (Chromium on the local device must reach them without credentials)
-- [ ] Expose `GET /api/v1/status` unauthenticated (read-only, useful for monitoring)
-- [ ] Display a login prompt in the browser when no session cookie is present
-- [ ] Session cookie: issue a short-lived signed token after successful auth to avoid
+- [x] Expose `GET /api/v1/status` unauthenticated (read-only, useful for monitoring)
+- [x] Display a login prompt in the browser when no session cookie is present
+- [x] Session cookie: issue a short-lived signed token after successful auth to avoid
   re-prompting on every page load (use `crypto/hmac` + config password as key)
-- [ ] Document the security model: CE password is for local-network protection only;
+- [x] Document the security model: CE password is for local-network protection only;
   do not expose port 8080 to the internet without a reverse proxy + TLS
 
 ---
