@@ -1,0 +1,48 @@
+# Afficho Client — Example Configuration
+# Copy to config.toml and adjust for your environment.
+# Any omitted keys use the built-in defaults.
+
+[server]
+# Address the HTTP server listens on.
+# Use "0.0.0.0" to allow access from other devices on the network.
+host = "0.0.0.0"
+port = 8080
+
+[admin]
+# Password for the admin UI and API write endpoints (Community Edition).
+# If empty, authentication is disabled — only do this on a trusted network.
+# Enterprise Edition: SSO and RBAC are handled by the Afficho Cloud console.
+password = ""
+
+[display]
+# Set to true on production devices to automatically launch the browser.
+# Keep false during development — open http://localhost:8080/display manually.
+launch_browser = false
+
+# Browser executable name. Common values:
+#   Raspberry Pi OS:  "chromium-browser"
+#   Debian/Ubuntu:    "chromium"
+#   Others:           "google-chrome"
+browser = "chromium-browser"
+
+# X11 or Wayland display to use (Linux only)
+display_env = ":0"
+
+[storage]
+# Directory for the SQLite database and downloaded media files.
+# Created automatically if it does not exist.
+data_dir = "./data"
+
+# Maximum disk space for cached media (gigabytes).
+max_cache_gb = 10
+
+[cloud]
+# Afficho Cloud sync (not yet implemented).
+enabled = false
+endpoint = "https://api.afficho.io"
+device_id = ""
+token = ""
+
+[logging]
+# Set to true for verbose debug output.
+debug = false

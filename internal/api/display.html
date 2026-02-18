@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Afficho</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='none'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%236C3AED'/%3E%3Cstop offset='100%25' stop-color='%232563EB'/%3E%3C/linearGradient%3E%3ClinearGradient id='sc' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%231E1B4B'/%3E%3Cstop offset='100%25' stop-color='%230F172A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='512' height='512' rx='96' fill='url(%23bg)'/%3E%3Crect x='72' y='80' width='368' height='264' rx='20' fill='%23fff' opacity='.15'/%3E%3Crect x='84' y='92' width='344' height='240' rx='12' fill='url(%23sc)'/%3E%3Crect x='112' y='136' width='180' height='16' rx='8' fill='%236C3AED' opacity='.9'/%3E%3Crect x='112' y='164' width='140' height='12' rx='6' fill='%23fff' opacity='.35'/%3E%3Crect x='112' y='186' width='160' height='12' rx='6' fill='%23fff' opacity='.25'/%3E%3Crect x='112' y='208' width='120' height='12' rx='6' fill='%23fff' opacity='.2'/%3E%3Crect x='320' y='136' width='80' height='84' rx='8' fill='%232563EB' opacity='.6'/%3E%3Ccircle cx='340' cy='156' r='8' fill='%23fff' opacity='.5'/%3E%3Cpolygon points='320,210 360,176 400,210' fill='%23fff' opacity='.3'/%3E%3Crect x='208' y='356' width='96' height='12' rx='6' fill='%23fff' opacity='.25'/%3E%3Crect x='240' y='344' width='32' height='20' rx='4' fill='%23fff' opacity='.2'/%3E%3Ccircle cx='380' cy='292' r='20' fill='%236C3AED' opacity='.9'/%3E%3Cpolygon points='374,282 374,302 392,292' fill='%23fff'/%3E%3Cpath d='M420 108a40 40 0 010 56' stroke='%23fff' stroke-width='5' stroke-linecap='round' fill='none' opacity='.35'/%3E%3Cpath d='M434 96a60 60 0 010 80' stroke='%23fff' stroke-width='5' stroke-linecap='round' fill='none' opacity='.25'/%3E%3C/svg%3E">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #0F172A;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    #stage {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #stage img {
+      width: 100%; height: 100%;
+      object-fit: contain;
+    }
+    #stage video {
+      width: 100%; height: 100%;
+      object-fit: contain;
+    }
+    #stage iframe {
+      width: 100%; height: 100%;
+      border: none;
+    }
+
+    /* ── Splash / idle state ── */
+    #splash {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+    }
+    #splash .logo {
+      width: 96px;
+      height: 96px;
+      opacity: 0.9;
+    }
+    #splash .wordmark {
+      font-size: 2.4rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #6C3AED, #2563EB);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    #splash .message {
+      font-size: 1rem;
+      color: #475569;
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <!-- Inline logo SVG used by the splash screen -->
+  <template id="splash-tpl">
+    <div id="splash">
+      <svg class="logo" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#6C3AED"/>
+            <stop offset="100%" stop-color="#2563EB"/>
+          </linearGradient>
+          <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1E1B4B"/>
+            <stop offset="100%" stop-color="#0F172A"/>
+          </linearGradient>
+        </defs>
+        <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+        <rect x="72" y="80" width="368" height="264" rx="20" fill="#fff" opacity="0.15"/>
+        <rect x="84" y="92" width="344" height="240" rx="12" fill="url(#screen)"/>
+        <rect x="112" y="136" width="180" height="16" rx="8" fill="#6C3AED" opacity="0.9"/>
+        <rect x="112" y="164" width="140" height="12" rx="6" fill="#fff" opacity="0.35"/>
+        <rect x="112" y="186" width="160" height="12" rx="6" fill="#fff" opacity="0.25"/>
+        <rect x="112" y="208" width="120" height="12" rx="6" fill="#fff" opacity="0.2"/>
+        <rect x="320" y="136" width="80" height="84" rx="8" fill="#2563EB" opacity="0.6"/>
+        <circle cx="340" cy="156" r="8" fill="#fff" opacity="0.5"/>
+        <polygon points="320,210 360,176 400,210" fill="#fff" opacity="0.3"/>
+        <rect x="208" y="356" width="96" height="12" rx="6" fill="#fff" opacity="0.25"/>
+        <rect x="240" y="344" width="32" height="20" rx="4" fill="#fff" opacity="0.2"/>
+        <circle cx="380" cy="292" r="20" fill="#6C3AED" opacity="0.9"/>
+        <polygon points="374,282 374,302 392,292" fill="#fff"/>
+        <path d="M420 108 a40 40 0 0 1 0 56" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.35"/>
+        <path d="M434 96 a60 60 0 0 1 0 80" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.25"/>
+      </svg>
+      <span class="wordmark">afficho</span>
+      <span class="message"></span>
+    </div>
+  </template>
+
+  <script>
+    const stage = document.getElementById('stage');
+    const splashTpl = document.getElementById('splash-tpl');
+    let advanceTimer = null;
+
+    async function tick() {
+      try {
+        const res = await fetch('/display/current');
+        if (res.status === 204) {
+          showSplash('No content scheduled');
+          schedule(5000);
+          return;
+        }
+        const item = await res.json();
+        render(item);
+        schedule(item.duration_s * 1000);
+      } catch (e) {
+        console.error('display error', e);
+        showSplash('Waiting for connection\u2026');
+        schedule(5000);
+      }
+    }
+
+    function schedule(ms) {
+      if (advanceTimer) clearTimeout(advanceTimer);
+      advanceTimer = setTimeout(tick, ms);
+    }
+
+    function render(item) {
+      let el;
+      switch (item.type) {
+        case 'image':
+          el = document.createElement('img');
+          el.src = item.source;
+          break;
+        case 'video':
+          el = document.createElement('video');
+          el.src = item.source;
+          el.autoplay = true;
+          el.muted = true;
+          el.loop = false;
+          el.addEventListener('ended', tick);
+          break;
+        case 'url':
+        case 'html':
+          el = document.createElement('iframe');
+          el.src = item.source;
+          el.sandbox = 'allow-scripts allow-same-origin allow-forms';
+          break;
+        default:
+          showSplash('Unknown content type: ' + item.type);
+          return;
+      }
+      stage.innerHTML = '';
+      stage.appendChild(el);
+    }
+
+    function showSplash(msg) {
+      const clone = splashTpl.content.cloneNode(true);
+      clone.querySelector('.message').textContent = msg || '';
+      stage.innerHTML = '';
+      stage.appendChild(clone);
+    }
+
+    tick();
+  </script>
+</body>
+</html>

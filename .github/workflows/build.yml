@@ -1,0 +1,57 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify modules
+        run: go mod verify
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+      - name: Cross-compile (linux/amd64)
+        run: GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/afficho
+
+      - name: Cross-compile (linux/arm64)
+        run: GOOS=linux GOARCH=arm64 go build -o /dev/null ./cmd/afficho
+
+      - name: Cross-compile (linux/armv7)
+        run: GOOS=linux GOARCH=arm GOARM=7 go build -o /dev/null ./cmd/afficho
+
+      - name: Cross-compile (linux/armv6)
+        run: GOOS=linux GOARCH=arm GOARM=6 go build -o /dev/null ./cmd/afficho
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest

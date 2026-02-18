@@ -1,0 +1,294 @@
+# Afficho Client — Implementation TODOs
+
+Tracks all pending work. Update this file as features land.
+
+**Legend:** `[ ]` pending · `[~]` in progress · `[x]` done
+
+---
+
+## Edition model
+
+| Feature | CE (this repo) | EE (Afficho Cloud) |
+|---|---|---|
+| Admin auth | Single password via config | SSO + RBAC |
+| Device management | Local only | Web console |
+| Display control | WebSocket (local) | Cloud-pushed via WebSocket |
+| Scheduling | Local cron | Cloud-managed |
+
+---
+
+## Phase 1 — Core Infrastructure
+
+- [x] Project layout (`cmd/`, `internal/`, `web/`)
+- [x] TOML config with defaults + file override
+- [x] `[admin]` password field in config (CE auth)
+- [x] SQLite schema (content, playlists, playlist_items, schedules)
+- [x] HTTP server (chi router, graceful shutdown)
+- [x] Structured logging (`log/slog`)
+- [x] Signal handling (SIGINT, SIGTERM)
+- [x] Multi-arch build (amd64, arm64, armv7, armv6)
+- [x] Dev container (Go 1.23, golangci-lint, forwarded port 8080)
+- [x] GitHub Actions CI (build + lint + cross-compile on every push)
+- [x] GitHub Actions release (matrix build → GitHub release + checksums)
+- [x] Makefile with build / test / lint / dev targets
+- [x] Database migration versioning (replace `CREATE IF NOT EXISTS` with numbered migrations)
+- [x] SIGHUP handler: reload config + trigger scheduler refresh without restart
+- [x] Embed static assets with `//go:embed` (currently inline strings)
+- [x] `.golangci.yml` linter config file
+- [x] `LICENSE` file (Apache 2.0)
+
+---
+
+## Phase 2 — Admin Authentication (CE)
+
+Simple single-password protection for the admin UI and all write API endpoints.
+EE authentication (SSO, RBAC) lives in the Afficho Cloud web console, not here.
+
+- [ ] `requireAuth()` chi middleware using HTTP Basic Auth
+  - Check `config.Admin.Password`; skip auth entirely if password is empty
+  - Unauthenticated requests: return `401` with `WWW-Authenticate: Basic` header
+- [ ] Apply `requireAuth()` to `/admin`, `/admin/*`, and all `/api/v1` write routes
+  - `/display`, `/display/current`, `/ws/display`, and `/media/*` stay unauthenticated
+    (Chromium on the local device must reach them without credentials)
+- [ ] Expose `GET /api/v1/status` unauthenticated (read-only, useful for monitoring)
+- [ ] Display a login prompt in the browser when no session cookie is present
+- [ ] Session cookie: issue a short-lived signed token after successful auth to avoid
+  re-prompting on every page load (use `crypto/hmac` + config password as key)
+- [ ] Document the security model: CE password is for local-network protection only;
+  do not expose port 8080 to the internet without a reverse proxy + TLS
+
+---
+
+## Phase 3 — WebSocket Display Control
+
+WebSocket replaces the JS polling approach for display transitions. It also forms
+the foundation for future real-time features (emergency alerts, ticket queues, etc.).
+
+### Server-side
+- [ ] WebSocket endpoint `GET /ws/display` (upgrade via `golang.org/x/net/websocket`
+  or `nhooyr.io/websocket` — prefer the latter for context support)
+- [ ] Hub: track all connected display clients (fan-out broadcaster)
+- [ ] Message types (JSON envelope `{ "type": "...", "payload": { ... } }`):
+  - `current` — sent on connect and on every item change: full `Item` object
+  - `reload`  — tell display page to reload itself (after software update)
+  - `alert`   — overlay an urgent message on screen (text + optional TTL)
+  - *(future)* `ticket` — push a ticket/queue entry onto the display
+  - *(future)* `clear_alert` — dismiss an active alert
+- [ ] Broadcast `current` message whenever the scheduler advances
+- [ ] Broadcast `current` message immediately after any playlist/content change
+- [ ] Reconnect handling: send `current` on every new WebSocket connection so a
+  freshly opened display page gets the right content without waiting
+
+### Client-side (display page)
+- [ ] Replace JS polling loop with WebSocket connection to `/ws/display`
+- [ ] Reconnect with exponential back-off on disconnect (Chromium restart, network blip)
+- [ ] Fall back to polling `/display/current` if WebSocket fails after N retries
+- [ ] Handle `alert` message: show full-screen overlay with message text + auto-dismiss
+- [ ] Handle `reload` message: call `location.reload()`
+
+---
+
+## Phase 4 — Content Management: Web Pages (v1)
+
+First content type: web pages rendered in a full-screen iframe. This covers the
+most common digital signage use case (dashboards, live websites, internal portals).
+
+### REST endpoints
+- [ ] `GET  /api/v1/content` — list all items (id, name, type, url, duration_s, created_at)
+- [ ] `POST /api/v1/content` — add a URL content item
+  ```json
+  { "name": "...", "type": "url", "url": "https://...", "duration_s": 30 }
+  ```
+- [ ] `GET    /api/v1/content/{id}` — get single item
+- [ ] `PATCH  /api/v1/content/{id}` — update name / url / duration
+- [ ] `DELETE /api/v1/content/{id}` — remove item (also removes from all playlists)
+- [ ] After any write: call `scheduler.TriggerReload()` + broadcast WebSocket `current`
+
+### Validation
+- [ ] Require `https://` or `http://` scheme
+- [ ] Reject obviously invalid URLs (use `url.Parse`)
+- [ ] `duration_s` must be > 0
+
+### iframe sandboxing
+- [ ] Default sandbox: `allow-scripts allow-same-origin allow-forms`
+- [ ] Per-item `allow_popups` flag for content that needs it
+- [ ] Document known limitations (X-Frame-Options, CSP on external sites)
+
+---
+
+## Phase 5 — Content Management: Images & Video
+
+Images and video are stored locally. The daemon downloads them on add; Chromium
+loads them from `/media/`.
+
+### Images
+- [ ] `POST /api/v1/content` with `type: "image"`:
+  - Accept external URL → download to `data/media/{id}.{ext}`
+  - Accept multipart file upload
+- [ ] Accepted MIME types: `image/jpeg`, `image/png`, `image/gif`, `image/webp`
+- [ ] Validate magic bytes (not just Content-Type / extension)
+- [ ] Reject files > configurable size limit (`storage.max_upload_mb`)
+- [ ] Store `size_bytes` in DB
+
+### Video
+- [ ] `POST /api/v1/content` with `type: "video"`:
+  - Accept external URL → download
+  - Accept multipart upload
+- [ ] Accepted MIME types: `video/mp4`, `video/webm`
+- [ ] Validate magic bytes
+- [ ] Display page: advance on `video.ended` event (before duration timer)
+- [ ] Display page: `autoplay`, `muted`, `playsinline` attributes
+
+### Storage management
+- [ ] Track total media size; expose in `GET /api/v1/storage`
+- [ ] Cache eviction when `storage.max_cache_gb` is exceeded (LRU — delete items
+  not in any active playlist first, then oldest by last-played)
+
+### Content type: inline HTML
+- [ ] `type: "html"` — store an HTML string in the DB, serve it as a `data:` URL
+  or a local route `/content/{id}/render` and iframe it
+- [ ] Use case: custom slides built with a future editor
+
+---
+
+## Phase 6 — Playlist Management API
+
+- [ ] `GET  /api/v1/playlists` — list playlists (id, name, is_default, item count)
+- [ ] `POST /api/v1/playlists` — create playlist `{ "name": "..." }`
+- [ ] `GET  /api/v1/playlists/{id}` — get playlist with full ordered item list
+- [ ] `PUT  /api/v1/playlists/{id}/items` — replace item list
+  ```json
+  [{ "content_id": "...", "duration_override_s": null }, ...]
+  ```
+- [ ] `DELETE /api/v1/playlists/{id}` — delete (prevent deleting the last playlist)
+- [ ] `POST /api/v1/playlists/{id}/activate` — set as default (deactivates previous)
+- [ ] Auto-create a default playlist named "Default" on first run
+- [ ] After any change: `scheduler.TriggerReload()` + broadcast WebSocket `current`
+
+---
+
+## Phase 7 — Scheduler
+
+- [x] Basic queue: `Current()` / `Advance()` / `Queue()`
+- [x] Periodic DB reload (every 30 s)
+- [x] `TriggerReload()` for instant refresh after writes
+- [ ] Server-side advance timer: track expiry of current item, auto-call `Advance()`
+  and broadcast WebSocket `current` — removes reliance on client-side timing
+- [ ] `GET /api/v1/scheduler/status` — current item, queue, seconds until next advance
+- [ ] Cron-based schedule: activate playlist X during time window Y
+  - Simple `HH:MM–HH:MM weekdays/weekends/everyday` syntax first
+  - Evaluate `robfig/cron` for full cron expression support
+- [ ] Schedule priority: higher-priority schedule overrides lower at the same time
+- [ ] Handle empty playlist gracefully (WebSocket sends `null` current; display shows splash)
+
+---
+
+## Phase 8 — Admin UI
+
+### Functionality
+- [ ] Login page (shown when password is set and no valid session cookie exists)
+- [ ] Dashboard: current item preview (iframe), queue list, device status strip
+- [ ] Content library: card grid — URL items show favicon + URL, images show thumbnail,
+  video shows thumbnail + duration badge
+- [ ] Add URL form: name, URL, duration (seconds)
+- [ ] Delete content with confirmation dialog
+- [ ] Playlist editor: drag-to-reorder items, per-item duration override inline
+- [ ] Playlist switcher: create new / activate existing
+- [ ] Storage stats: used / total, item count
+- [ ] Live current-item preview auto-refreshes via WebSocket (reuses `/ws/display`)
+
+### Technical choices
+- [ ] Server-side rendered templates (`html/template`) + HTMX for dynamic parts
+  - No build step, no JS framework, works well with Go
+- [ ] Embed templates + static assets with `//go:embed web/`
+- [ ] Responsive layout (usable on a phone for on-site content management)
+- [ ] Flash messages (success / error) via cookie or query param
+
+---
+
+## Phase 9 — Hardware & OS Integration
+
+- [ ] `systemd` service unit file (`afficho.service`)
+- [ ] Install script (`scripts/install.sh`): copy binary, create service, write config
+- [ ] Disable screensaver/DPMS on launch:
+  `xset s off && xset -dpms && xset s noblank`
+- [ ] Screen power schedule: turn HDMI off at night, on in the morning
+  - Use `vcgencmd display_power` (RPi) or `xset dpms force off/on`
+- [ ] System info endpoint `GET /api/v1/system`:
+  CPU temp, memory usage, disk usage, uptime, local IP, afficho version
+- [ ] Health check endpoint `GET /healthz` (200 OK, for watchdog / load balancer)
+- [ ] Log rotation config (`/etc/logrotate.d/afficho`)
+- [ ] Wayland support in browser launcher (`--ozone-platform=wayland`)
+- [ ] Auto-detect browser executable (try in order: chromium-browser, chromium,
+  google-chrome, brave-browser)
+
+---
+
+## Phase 10 — Cloud Sync (Afficho Cloud / EE)
+
+- [ ] Generate stable device ID on first run (UUIDv4, stored in `device_meta`)
+- [ ] Device registration: POST device info (ID, hostname, IP, arch, version) to cloud
+- [ ] Heartbeat: periodic POST with current status (playing item, uptime, storage)
+- [ ] Receive updates from cloud: new playlist, new content URLs, config changes
+- [ ] Content download: fetch from cloud-provided signed URLs → local media cache
+- [ ] Auth token storage in `device_meta`, refresh before expiry
+- [ ] Offline resilience: operate fully from local DB when cloud is unreachable
+- [ ] `GET /api/v1/cloud/status` — device ID, last sync, connection state
+- [ ] Protocol: WebSocket (persistent, bidirectional) — reuse the message envelope
+  from Phase 3; cloud sends same `current` / `alert` / `reload` messages
+
+---
+
+## Phase 11 — Security
+
+- [x] Auth design decided: CE = single config password, EE = cloud console SSO/RBAC
+- [ ] Implement `requireAuth()` middleware (see Phase 2)
+- [ ] CORS: restrict `/api/v1` to same origin by default; configurable allowlist
+- [ ] Rate limiting on upload endpoint (prevent disk fill)
+- [ ] Path traversal audit on `/media/` file server
+- [ ] iframe sandbox policy review per content type (Phase 4–5)
+- [ ] Optional TLS: document reverse-proxy setup (nginx / Caddy) for HTTPS
+- [ ] Security note in README: do not expose port 8080 to the internet unprotected
+
+---
+
+## Phase 12 — Testing
+
+- [ ] Unit: config loading (defaults, file override, missing file)
+- [ ] Unit: scheduler queue logic (advance, wrap-around, empty queue, reload)
+- [ ] Unit: content manager path traversal guard
+- [ ] Unit: `requireAuth` middleware (with / without password, valid / invalid token)
+- [ ] Integration: REST API via `net/http/httptest`
+  - Add URL → create playlist → activate → GET `/display/current` → correct item
+- [ ] Integration: WebSocket — connect, receive `current`, trigger advance, receive new `current`
+- [ ] Integration: graceful shutdown under in-flight requests
+- [ ] Benchmark: scheduler `Current()` under concurrent read load
+
+---
+
+## Phase 13 — Packaging & Distribution
+
+- [ ] `.deb` package (using `nfpm`) for Raspberry Pi OS / Debian
+- [ ] Docker image (`FROM debian:bookworm-slim`) for dev/testing
+- [ ] Docker Compose file: daemon + Chromium in headless mode (for CI display tests)
+- [ ] Raspberry Pi OS image recipe (pi-gen) for zero-setup SD card flashing
+- [ ] Auto-update: check GitHub releases API, download, verify checksum, replace binary
+
+---
+
+## Backlog / Nice to Have
+
+- [ ] **Emergency alert overlay** — cloud-pushed message that pre-empts all content,
+  shown as a banner or full-screen takeover (WebSocket `alert` message, Phase 3)
+- [ ] **Ticket / queue display** — push structured data (e.g. customer number) to the
+  screen via WebSocket `ticket` message; rendered as an HTML overlay
+- [ ] **Multi-zone display** — split-screen layout with independent playlists per zone
+  (major architecture change to the display renderer)
+- [ ] **HDMI CEC control** — turn TV on/off via `cec-ctl` (Raspberry Pi)
+- [ ] **RSS / Atom feed** content source — auto-refresh headlines
+- [ ] **Clock / date overlay** — configurable position + style
+- [ ] **QR code overlay** — configurable URL
+- [ ] **Proof-of-play log** — record item ID, start time, duration played
+- [ ] **Prometheus metrics** endpoint (`/metrics`)
+- [ ] **Content editor** — basic text-on-colour slide compositor in the admin UI
+- [ ] **Android companion app** — WebView wrapper pointing at `http://device-ip:8080`

@@ -1,0 +1,24 @@
+# Binaries
+bin/
+dist/
+
+# Config (may contain secrets)
+config.toml
+
+# Data directory (runtime)
+data/
+
+# Go
+*.test
+*.out
+coverage.out
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

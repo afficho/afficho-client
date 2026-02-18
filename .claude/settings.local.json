@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make build:*)",
+      "Bash(go vet:*)",
+      "Bash(make lint:*)",
+      "Bash(gofmt:*)"
+    ]
+  }
+}
