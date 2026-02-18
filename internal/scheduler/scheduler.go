@@ -31,6 +31,10 @@ type Scheduler struct {
 	// reload is signalled after content or playlist changes to trigger
 	// an immediate queue refresh without waiting for the ticker.
 	reload chan struct{}
+
+	// OnChange is called after the current item changes (advance or reload).
+	// Set this before calling Run. Safe to leave nil.
+	OnChange func()
 }
 
 // New creates a Scheduler. Call Run to start the background loop.
@@ -56,13 +60,16 @@ func (s *Scheduler) Current() (Item, bool) {
 // Advance moves to the next item in the queue and returns it.
 func (s *Scheduler) Advance() (Item, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if len(s.queue) == 0 {
+		s.mu.Unlock()
 		return Item{}, false
 	}
 	s.current = (s.current + 1) % len(s.queue)
-	return s.queue[s.current], true
+	item := s.queue[s.current]
+	s.mu.Unlock()
+
+	s.notifyChange()
+	return item, true
 }
 
 // Queue returns a snapshot of the full playback queue.
@@ -118,16 +125,24 @@ func (s *Scheduler) reloadQueue() error {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	// Preserve current position if the queue grew; reset if it shrank or changed.
 	if s.current >= len(items) {
 		s.current = 0
 	}
 	s.queue = items
+	s.mu.Unlock()
 
 	slog.Debug("scheduler: queue reloaded", "items", len(items))
+	s.notifyChange()
 	return nil
+}
+
+// notifyChange calls the OnChange callback if set.
+// Must be called without holding mu.
+func (s *Scheduler) notifyChange() {
+	if s.OnChange != nil {
+		s.OnChange()
+	}
 }
 
 func (s *Scheduler) loadDefaultPlaylist() ([]Item, error) {

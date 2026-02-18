@@ -21,6 +21,7 @@ type Server struct {
 	db        *db.DB
 	content   *content.Manager
 	scheduler *scheduler.Scheduler
+	hub       *Hub
 	mux       *chi.Mux
 }
 
@@ -36,7 +37,13 @@ func NewServer(
 		db:        database,
 		content:   mgr,
 		scheduler: sched,
+		hub:       newHub(),
 	}
+
+	// Broadcast the current item to all display clients whenever the
+	// scheduler advances or reloads the queue.
+	sched.OnChange = s.BroadcastCurrent
+
 	s.routes()
 	return s
 }
@@ -52,6 +59,7 @@ func (s *Server) routes() {
 	// without credentials.
 	r.Get("/display", s.handleDisplay)
 	r.Get("/display/current", s.handleDisplayCurrent)
+	r.Get("/ws/display", s.handleDisplayWS)
 
 	// Static media files.
 	r.Handle("/media/*", http.StripPrefix("/media/",

@@ -65,26 +65,25 @@ WebSocket replaces the JS polling approach for display transitions. It also form
 the foundation for future real-time features (emergency alerts, ticket queues, etc.).
 
 ### Server-side
-- [ ] WebSocket endpoint `GET /ws/display` (upgrade via `golang.org/x/net/websocket`
-  or `nhooyr.io/websocket` — prefer the latter for context support)
-- [ ] Hub: track all connected display clients (fan-out broadcaster)
-- [ ] Message types (JSON envelope `{ "type": "...", "payload": { ... } }`):
+- [x] WebSocket endpoint `GET /ws/display` (upgrade via `github.com/coder/websocket`)
+- [x] Hub: track all connected display clients (fan-out broadcaster)
+- [x] Message types (JSON envelope `{ "type": "...", "payload": { ... } }`):
   - `current` — sent on connect and on every item change: full `Item` object
   - `reload`  — tell display page to reload itself (after software update)
   - `alert`   — overlay an urgent message on screen (text + optional TTL)
   - *(future)* `ticket` — push a ticket/queue entry onto the display
   - *(future)* `clear_alert` — dismiss an active alert
-- [ ] Broadcast `current` message whenever the scheduler advances
-- [ ] Broadcast `current` message immediately after any playlist/content change
-- [ ] Reconnect handling: send `current` on every new WebSocket connection so a
+- [x] Broadcast `current` message whenever the scheduler advances
+- [x] Broadcast `current` message immediately after any playlist/content change
+- [x] Reconnect handling: send `current` on every new WebSocket connection so a
   freshly opened display page gets the right content without waiting
 
 ### Client-side (display page)
-- [ ] Replace JS polling loop with WebSocket connection to `/ws/display`
-- [ ] Reconnect with exponential back-off on disconnect (Chromium restart, network blip)
-- [ ] Fall back to polling `/display/current` if WebSocket fails after N retries
-- [ ] Handle `alert` message: show full-screen overlay with message text + auto-dismiss
-- [ ] Handle `reload` message: call `location.reload()`
+- [x] Replace JS polling loop with WebSocket connection to `/ws/display`
+- [x] Reconnect with exponential back-off on disconnect (Chromium restart, network blip)
+- [x] Fall back to polling `/display/current` if WebSocket fails after N retries
+- [x] Handle `alert` message: show full-screen overlay with message text + auto-dismiss
+- [x] Handle `reload` message: call `location.reload()`
 
 ---
 

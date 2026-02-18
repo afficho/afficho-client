@@ -36,6 +36,7 @@
       flex-direction: column;
       align-items: center;
       gap: 2rem;
+      position: relative;
     }
     #splash .logo {
       width: 96px;
@@ -56,10 +57,80 @@
       color: #475569;
       letter-spacing: 0.05em;
     }
+
+    /* ── Avatar ── */
+    .avatar {
+      position: absolute;
+      left: 100%;
+      top: 50%;
+      transform: translateY(-50%);
+      margin-left: 1.5rem;
+      width: 80px;
+      height: auto;
+      opacity: 0.35;
+    }
+    .avatar .arm-right {
+      transform-origin: 64px 60px;
+      will-change: transform;
+      animation: checkWatch 8s ease-in-out infinite;
+    }
+    .avatar .head-group {
+      transform-origin: 50px 32px;
+      will-change: transform;
+      animation: headTilt 8s ease-in-out infinite;
+    }
+    @keyframes checkWatch {
+      0%, 72%  { transform: rotate(0deg); }
+      78%, 88% { transform: rotate(-120deg); }
+      94%, 100% { transform: rotate(0deg); }
+    }
+    @keyframes headTilt {
+      0%, 74%  { transform: rotate(0deg); }
+      80%, 86% { transform: rotate(12deg); }
+      92%, 100% { transform: rotate(0deg); }
+    }
+
+    /* ── Alert overlay ── */
+    #alert-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.92);
+      align-items: center;
+      justify-content: center;
+      padding: 3rem;
+    }
+    #alert-overlay.visible { display: flex; }
+    #alert-overlay .alert-box {
+      max-width: 80%;
+      text-align: center;
+      animation: alertIn 0.3s ease-out;
+    }
+    #alert-overlay .alert-icon {
+      font-size: 3rem;
+      margin-bottom: 1.5rem;
+    }
+    #alert-overlay .alert-text {
+      font-size: 2.4rem;
+      font-weight: 700;
+      color: #FFFFFF;
+      line-height: 1.3;
+    }
+    @keyframes alertIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to   { opacity: 1; transform: scale(1); }
+    }
   </style>
 </head>
 <body>
   <div id="stage"></div>
+  <div id="alert-overlay">
+    <div class="alert-box">
+      <div class="alert-icon">&#9888;</div>
+      <div class="alert-text"></div>
+    </div>
+  </div>
 
   <!-- Inline logo SVG used by the splash screen -->
   <template id="splash-tpl">
@@ -94,36 +165,39 @@
       </svg>
       <span class="wordmark">afficho</span>
       <span class="message"></span>
+      <!-- Avatar that periodically checks its watch -->
+      <svg class="avatar" viewBox="0 0 100 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <g class="head-group">
+          <circle cx="50" cy="32" r="22" fill="#334155"/>
+          <circle cx="42" cy="28" r="2.5" fill="#94A3B8"/>
+          <circle cx="58" cy="28" r="2.5" fill="#94A3B8"/>
+          <path d="M42 38 Q50 44 58 38" stroke="#94A3B8" stroke-width="2" stroke-linecap="round" fill="none"/>
+        </g>
+        <rect x="36" y="54" width="28" height="44" rx="6" fill="#334155"/>
+        <path d="M36 60 L22 90" stroke="#334155" stroke-width="8" stroke-linecap="round"/>
+        <g class="arm-right">
+          <path d="M64 60 L78 90" stroke="#334155" stroke-width="8" stroke-linecap="round"/>
+          <rect x="73" y="84" width="10" height="7" rx="2" fill="#6C3AED"/>
+          <rect x="76" y="86" width="4" height="3" rx="1" fill="#818CF8"/>
+        </g>
+        <path d="M44 96 L40 140" stroke="#334155" stroke-width="8" stroke-linecap="round"/>
+        <path d="M56 96 L60 140" stroke="#334155" stroke-width="8" stroke-linecap="round"/>
+        <ellipse cx="38" cy="144" rx="10" ry="5" fill="#1E293B"/>
+        <ellipse cx="62" cy="144" rx="10" ry="5" fill="#1E293B"/>
+      </svg>
     </div>
   </template>
 
   <script>
     const stage = document.getElementById('stage');
     const splashTpl = document.getElementById('splash-tpl');
+    const alertOverlay = document.getElementById('alert-overlay');
+    const alertText = alertOverlay.querySelector('.alert-text');
+
     let advanceTimer = null;
+    let alertTimer = null;
 
-    async function tick() {
-      try {
-        const res = await fetch('/display/current');
-        if (res.status === 204) {
-          showSplash('No content scheduled');
-          schedule(5000);
-          return;
-        }
-        const item = await res.json();
-        render(item);
-        schedule(item.duration_s * 1000);
-      } catch (e) {
-        console.error('display error', e);
-        showSplash('Waiting for connection\u2026');
-        schedule(5000);
-      }
-    }
-
-    function schedule(ms) {
-      if (advanceTimer) clearTimeout(advanceTimer);
-      advanceTimer = setTimeout(tick, ms);
-    }
+    // ── Content rendering ──────────────────────────────────────────────
 
     function render(item) {
       let el;
@@ -138,7 +212,10 @@
           el.autoplay = true;
           el.muted = true;
           el.loop = false;
-          el.addEventListener('ended', tick);
+          el.addEventListener('ended', () => {
+            // Let the server advance; if using polling fallback, tick early.
+            if (!wsConnected) tick();
+          });
           break;
         case 'url':
         case 'html':
@@ -154,6 +231,18 @@
       stage.appendChild(el);
     }
 
+    function handleCurrent(payload) {
+      if (!payload || !payload.type) {
+        showSplash('No content scheduled');
+        return;
+      }
+      render(payload);
+      // When using polling fallback, schedule the next tick.
+      if (!wsConnected) {
+        schedulePoll(payload.duration_s * 1000);
+      }
+    }
+
     function showSplash(msg) {
       const clone = splashTpl.content.cloneNode(true);
       clone.querySelector('.message').textContent = msg || '';
@@ -161,7 +250,127 @@
       stage.appendChild(clone);
     }
 
-    tick();
+    // ── Alert overlay ──────────────────────────────────────────────────
+
+    function showAlert(payload) {
+      alertText.textContent = payload.text || '';
+      alertOverlay.classList.add('visible');
+      if (alertTimer) clearTimeout(alertTimer);
+      const ttl = (payload.ttl_s || 30) * 1000;
+      alertTimer = setTimeout(hideAlert, ttl);
+    }
+
+    function hideAlert() {
+      alertOverlay.classList.remove('visible');
+      if (alertTimer) { clearTimeout(alertTimer); alertTimer = null; }
+    }
+
+    // ── WebSocket connection ───────────────────────────────────────────
+
+    let ws = null;
+    let wsConnected = false;
+    let wsRetries = 0;
+    const WS_MAX_RETRIES = 10;
+
+    function wsUrl() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return proto + '//' + location.host + '/ws/display';
+    }
+
+    function connectWS() {
+      try {
+        ws = new WebSocket(wsUrl());
+      } catch (e) {
+        console.error('ws: constructor failed', e);
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onopen = () => {
+        console.log('ws: connected');
+        wsConnected = true;
+        wsRetries = 0;
+        // Stop any polling fallback timer.
+        if (advanceTimer) { clearTimeout(advanceTimer); advanceTimer = null; }
+      };
+
+      ws.onmessage = (event) => {
+        let msg;
+        try { msg = JSON.parse(event.data); } catch (e) { return; }
+
+        switch (msg.type) {
+          case 'current':
+            handleCurrent(msg.payload);
+            break;
+          case 'reload':
+            location.reload();
+            break;
+          case 'alert':
+            showAlert(msg.payload || {});
+            break;
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('ws: disconnected');
+        wsConnected = false;
+        ws = null;
+        scheduleReconnect();
+      };
+
+      ws.onerror = () => {
+        // onclose fires after onerror, so reconnect is handled there.
+        if (ws) ws.close();
+      };
+    }
+
+    function scheduleReconnect() {
+      wsRetries++;
+      if (wsRetries > WS_MAX_RETRIES) {
+        console.log('ws: max retries reached, falling back to polling');
+        startPolling();
+        return;
+      }
+      // Exponential backoff: 1s, 2s, 4s, 8s, ... capped at 30s.
+      const delay = Math.min(1000 * Math.pow(2, wsRetries - 1), 30000);
+      console.log('ws: reconnecting in ' + delay + 'ms (attempt ' + wsRetries + ')');
+      setTimeout(connectWS, delay);
+    }
+
+    // ── Polling fallback ───────────────────────────────────────────────
+
+    function schedulePoll(ms) {
+      if (advanceTimer) clearTimeout(advanceTimer);
+      advanceTimer = setTimeout(tick, ms);
+    }
+
+    async function tick() {
+      try {
+        const res = await fetch('/display/current');
+        if (res.status === 204) {
+          showSplash('No content scheduled');
+          schedulePoll(5000);
+          return;
+        }
+        const item = await res.json();
+        render(item);
+        schedulePoll(item.duration_s * 1000);
+      } catch (e) {
+        console.error('poll error', e);
+        showSplash('Waiting for connection\u2026');
+        schedulePoll(5000);
+      }
+    }
+
+    function startPolling() {
+      console.log('falling back to polling /display/current');
+      tick();
+    }
+
+    // ── Boot ───────────────────────────────────────────────────────────
+
+    showSplash('Connecting\u2026');
+    connectWS();
   </script>
 </body>
 </html>
