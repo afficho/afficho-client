@@ -32,10 +32,12 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 // ── Scheduler ─────────────────────────────────────────────────────────────────
 
 func (s *Server) handleSchedulerStatus(w http.ResponseWriter, r *http.Request) {
-	current, _ := s.scheduler.Current()
+	current, ok := s.scheduler.Current()
 	respond(w, http.StatusOK, map[string]any{
-		"current": current,
-		"queue":   s.scheduler.Queue(),
+		"current":            current,
+		"has_current":        ok,
+		"queue":              s.scheduler.Queue(),
+		"seconds_until_next": s.scheduler.SecondsUntilNext(),
 	})
 }
 

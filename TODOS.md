@@ -171,14 +171,14 @@ loads them from `/media/`.
 - [x] Basic queue: `Current()` / `Advance()` / `Queue()`
 - [x] Periodic DB reload (every 30 s)
 - [x] `TriggerReload()` for instant refresh after writes
-- [ ] Server-side advance timer: track expiry of current item, auto-call `Advance()`
+- [x] Server-side advance timer: track expiry of current item, auto-call `Advance()`
   and broadcast WebSocket `current` — removes reliance on client-side timing
-- [ ] `GET /api/v1/scheduler/status` — current item, queue, seconds until next advance
+- [x] `GET /api/v1/scheduler/status` — current item, queue, seconds until next advance
 - [ ] Cron-based schedule: activate playlist X during time window Y
   - Simple `HH:MM–HH:MM weekdays/weekends/everyday` syntax first
   - Evaluate `robfig/cron` for full cron expression support
 - [ ] Schedule priority: higher-priority schedule overrides lower at the same time
-- [ ] Handle empty playlist gracefully (WebSocket sends `null` current; display shows splash)
+- [x] Handle empty playlist gracefully (WebSocket sends `null` current; display shows splash)
 
 ---
 

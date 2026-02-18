@@ -29,6 +29,11 @@ type Scheduler struct {
 	queue   []Item
 	current int
 
+	// advanceTimer fires when the current item's duration expires.
+	advanceTimer *time.Timer
+	// advancedAt records when the current item started displaying.
+	advancedAt time.Time
+
 	// reload is signalled after content or playlist changes to trigger
 	// an immediate queue refresh without waiting for the ticker.
 	reload chan struct{}
@@ -66,9 +71,11 @@ func (s *Scheduler) Advance() (Item, bool) {
 		return Item{}, false
 	}
 	s.current = (s.current + 1) % len(s.queue)
+	s.advancedAt = time.Now()
 	item := s.queue[s.current]
 	s.mu.Unlock()
 
+	s.resetTimer()
 	s.notifyChange()
 	return item, true
 }
@@ -103,8 +110,17 @@ func (s *Scheduler) Run(ctx context.Context) {
 	defer ticker.Stop()
 
 	for {
+		// Build a channel for the advance timer; nil if no timer is set.
+		var timerC <-chan time.Time
+		if s.advanceTimer != nil {
+			timerC = s.advanceTimer.C
+		}
+
 		select {
 		case <-ctx.Done():
+			if s.advanceTimer != nil {
+				s.advanceTimer.Stop()
+			}
 			return
 		case <-ticker.C:
 			if err := s.reloadQueue(); err != nil {
@@ -114,8 +130,45 @@ func (s *Scheduler) Run(ctx context.Context) {
 			if err := s.reloadQueue(); err != nil {
 				slog.Error("scheduler: queue reload failed", "error", err)
 			}
+		case <-timerC:
+			slog.Debug("scheduler: auto-advancing")
+			s.Advance()
 		}
 	}
+}
+
+// resetTimer stops any existing advance timer and starts a new one based on
+// the current item's duration. Must be called without holding mu.
+func (s *Scheduler) resetTimer() {
+	if s.advanceTimer != nil {
+		s.advanceTimer.Stop()
+	}
+	s.mu.RLock()
+	if len(s.queue) == 0 {
+		s.mu.RUnlock()
+		s.advanceTimer = nil
+		return
+	}
+	dur := time.Duration(s.queue[s.current%len(s.queue)].DurationS) * time.Second
+	s.mu.RUnlock()
+	s.advanceTimer = time.NewTimer(dur)
+}
+
+// SecondsUntilNext returns the estimated seconds until the scheduler auto-advances.
+// Returns 0 if the queue is empty.
+func (s *Scheduler) SecondsUntilNext() float64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if len(s.queue) == 0 {
+		return 0
+	}
+	item := s.queue[s.current%len(s.queue)]
+	elapsed := time.Since(s.advancedAt).Seconds()
+	remaining := float64(item.DurationS) - elapsed
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
 }
 
 // reloadQueue queries the database for the active playlist and rebuilds the queue.
@@ -131,8 +184,10 @@ func (s *Scheduler) reloadQueue() error {
 		s.current = 0
 	}
 	s.queue = items
+	s.advancedAt = time.Now()
 	s.mu.Unlock()
 
+	s.resetTimer()
 	slog.Debug("scheduler: queue reloaded", "items", len(items))
 	s.notifyChange()
 	return nil
