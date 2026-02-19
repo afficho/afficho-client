@@ -256,19 +256,21 @@ fallback, but it should not be a required decision at creation time.
 
 ## Phase 9 — Hardware & OS Integration
 
-- [ ] `systemd` service unit file (`afficho.service`)
-- [ ] Install script (`scripts/install.sh`): copy binary, create service, write config
-- [ ] Disable screensaver/DPMS on launch:
+- [x] `systemd` service unit file (`deploy/afficho.service`)
+- [x] Install script (`scripts/install.sh`): copy binary, create service, write config
+- [x] Disable screensaver/DPMS on launch:
   `xset s off && xset -dpms && xset s noblank`
-- [ ] Screen power schedule: turn HDMI off at night, on in the morning
+- [x] Screen power schedule: turn HDMI off at night, on in the morning
   - Use `vcgencmd display_power` (RPi) or `xset dpms force off/on`
-- [ ] System info endpoint `GET /api/v1/system`:
+  - Config: `screen_off_time` / `screen_on_time` in `[display]` (HH:MM format)
+- [x] System info endpoint `GET /api/v1/system`:
   CPU temp, memory usage, disk usage, uptime, local IP, afficho version
-- [ ] Health check endpoint `GET /healthz` (200 OK, for watchdog / load balancer)
-- [ ] Log rotation config (`/etc/logrotate.d/afficho`)
-- [ ] Wayland support in browser launcher (`--ozone-platform=wayland`)
-- [ ] Auto-detect browser executable (try in order: chromium-browser, chromium,
-  google-chrome, brave-browser)
+- [x] Health check endpoint `GET /healthz` (200 OK, for watchdog / load balancer)
+- [x] Log rotation config (`deploy/logrotate.d/afficho`)
+- [x] Wayland support in browser launcher (`--ozone-platform=wayland`)
+  - Config: `platform = "auto" | "x11" | "wayland"` in `[display]`
+- [x] Auto-detect browser executable (try in order: chromium-browser, chromium,
+  google-chrome, brave-browser) — set `browser = "auto"` in config
 
 ---
 

@@ -1,5 +1,5 @@
 .PHONY: build build-all build-amd64 build-arm64 build-armv7 build-armv6
-.PHONY: test lint clean run dev tidy
+.PHONY: test lint clean run dev dev-watch tidy
 
 BINARY  := afficho
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -51,6 +51,10 @@ run: build
 ## dev: Run with example config (no browser launch)
 dev:
 	go run ./cmd/afficho -config config.example.toml
+
+## dev-watch: Run with hot-reload (rebuilds on file changes)
+dev-watch:
+	air
 
 ## help: Show this help
 help:

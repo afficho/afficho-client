@@ -33,9 +33,17 @@ type ServerConfig struct {
 type DisplayConfig struct {
 	// LaunchBrowser controls whether the daemon automatically starts Chromium on startup.
 	LaunchBrowser bool `toml:"launch_browser"`
-	// Browser is the name of the browser executable to launch.
+	// Browser is the name or path of the browser executable to launch.
+	// Set to "auto" to auto-detect (tries chromium-browser, chromium, google-chrome, brave-browser).
 	Browser    string `toml:"browser"`
 	DisplayEnv string `toml:"display_env"` // e.g. ":0" for X11
+	// Platform selects the display server: "auto", "x11", or "wayland".
+	// "auto" detects based on WAYLAND_DISPLAY environment variable.
+	Platform string `toml:"platform"`
+	// ScreenOffTime turns HDMI off at this time daily (HH:MM format, empty = never).
+	ScreenOffTime string `toml:"screen_off_time"`
+	// ScreenOnTime turns HDMI on at this time daily (HH:MM format, empty = never).
+	ScreenOnTime string `toml:"screen_on_time"`
 }
 
 type StorageConfig struct {
@@ -64,8 +72,9 @@ func Default() *Config {
 		},
 		Display: DisplayConfig{
 			LaunchBrowser: true,
-			Browser:       "chromium-browser",
+			Browser:       "auto",
 			DisplayEnv:    ":0",
+			Platform:      "auto",
 		},
 		Storage: StorageConfig{
 			DataDir:     "/var/lib/afficho",

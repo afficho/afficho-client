@@ -30,7 +30,7 @@
   },
 
   // On first open: resolve dependencies (generates go.sum), then install dev tools.
-  "postCreateCommand": "go mod tidy && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest",
+  "postCreateCommand": "go mod tidy && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest && go install github.com/air-verse/air@v1.61.7",
 
   // rootless Docker (and Podman): UID 0 inside the container maps to the
   // unprivileged host user, so running as root here is safe and avoids

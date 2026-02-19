@@ -1,0 +1,21 @@
+[Unit]
+Description=Afficho Digital Signage Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=afficho
+Group=afficho
+ExecStart=/usr/local/bin/afficho -config /etc/afficho/config.toml
+Restart=on-failure
+RestartSec=5
+Environment=DISPLAY=:0
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/afficho /var/log/afficho
+
+[Install]
+WantedBy=multi-user.target

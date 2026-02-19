@@ -1,0 +1,12 @@
+/var/log/afficho/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 0640 afficho afficho
+    postrotate
+        systemctl reload afficho 2>/dev/null || true
+    endscript
+}

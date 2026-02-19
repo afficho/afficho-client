@@ -67,7 +67,7 @@ func main() {
 	sched := scheduler.New(database, contentMgr)
 
 	// ── HTTP server ───────────────────────────────────────────────────────
-	server := api.NewServer(cfg, database, contentMgr, sched)
+	server := api.NewServer(cfg, database, contentMgr, sched, version)
 
 	// ── Context / signal handling ─────────────────────────────────────────
 	ctx, cancel := signal.NotifyContext(context.Background(),
@@ -79,6 +79,11 @@ func main() {
 	sighup := make(chan os.Signal, 1)
 	signal.Notify(sighup, syscall.SIGHUP)
 	go handleSIGHUP(sighup, *configPath, cfg, logLevel, sched)
+
+	// ── Screen power schedule ─────────────────────────────────────────────
+	if screenCtrl := display.NewScreenController(cfg); screenCtrl != nil {
+		go screenCtrl.Run(ctx)
+	}
 
 	// ── Browser ───────────────────────────────────────────────────────────
 	if cfg.Display.LaunchBrowser {

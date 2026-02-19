@@ -263,9 +263,14 @@
           });
           break;
         case 'url':
-        case 'html':
           el = document.createElement('iframe');
           el.src = item.source;
+          el.sandbox = 'allow-scripts allow-same-origin allow-forms'
+            + (item.allow_popups ? ' allow-popups' : '');
+          break;
+        case 'html':
+          el = document.createElement('iframe');
+          el.src = '/content/' + item.id + '/render';
           el.sandbox = 'allow-scripts allow-same-origin allow-forms'
             + (item.allow_popups ? ' allow-popups' : '');
           break;

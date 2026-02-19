@@ -5,10 +5,49 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// htmlSnippetWrapper wraps user-provided HTML in a full page with readable
+// styling for the dark display background: white text, centered container,
+// system font stack matching the Afficho style guide.
+const htmlSnippetWrapper = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+  width:100%%;height:100%%;
+  background:#0F172A;
+  color:#FFFFFF;
+  font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  font-size:1rem;
+  line-height:1.6;
+}
+body{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:2rem;
+}
+.snippet{
+  max-width:80%%;
+  width:100%%;
+  text-align:center;
+}
+.snippet h1,.snippet h2,.snippet h3{margin-bottom:0.5em}
+.snippet p{margin-bottom:0.75em}
+.snippet a{color:#818CF8}
+.snippet img{max-width:100%%;height:auto}
+</style>
+</head>
+<body><div class="snippet">%s</div></body>
+</html>`
 
 //go:embed display.html
 var displayHTML []byte
@@ -61,7 +100,7 @@ func (s *Server) handleContentRender(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(source))
+	_, _ = fmt.Fprintf(w, htmlSnippetWrapper, source)
 }
 
 // handleDisplaySettings returns display preferences from device_meta.

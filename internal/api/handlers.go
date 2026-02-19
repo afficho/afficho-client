@@ -24,6 +24,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	current, hasCurrent := s.scheduler.Current()
 	respond(w, http.StatusOK, map[string]any{
 		"status":      "ok",
+		"version":     s.version,
 		"has_content": hasCurrent,
 		"current":     current,
 		"queue_len":   len(s.scheduler.Queue()),

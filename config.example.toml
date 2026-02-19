@@ -19,14 +19,24 @@ password = ""
 # Keep false during development — open http://localhost:8080/display manually.
 launch_browser = false
 
-# Browser executable name. Common values:
+# Browser executable name or "auto" to try chromium-browser, chromium,
+# google-chrome, brave-browser in order. Common values:
 #   Raspberry Pi OS:  "chromium-browser"
 #   Debian/Ubuntu:    "chromium"
 #   Others:           "google-chrome"
-browser = "chromium-browser"
+browser = "auto"
 
-# X11 or Wayland display to use (Linux only)
+# X11 or Wayland display to use (Linux only).
 display_env = ":0"
+
+# Display platform: "auto", "x11", or "wayland".
+# "auto" detects Wayland via the WAYLAND_DISPLAY environment variable.
+platform = "auto"
+
+# Screen power schedule — turn HDMI off at night, on in the morning.
+# Use HH:MM format. Leave empty to disable.
+# screen_off_time = "22:00"
+# screen_on_time  = "07:00"
 
 [storage]
 # Directory for the SQLite database and downloaded media files.

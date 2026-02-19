@@ -1,0 +1,20 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  bin = "./tmp/afficho"
+  cmd = "go build -o ./tmp/afficho ./cmd/afficho"
+  args_bin = ["-config", "config.example.toml"]
+  delay = 500
+  exclude_dir = ["tmp", "bin", "dist", "data", "node_modules", ".git"]
+  exclude_regex = ["_test\\.go$"]
+  include_ext = ["go", "toml", "html", "css", "js", "svg"]
+  kill_delay = 500
+  send_interrupt = true
+  stop_on_error = true
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true

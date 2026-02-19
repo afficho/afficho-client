@@ -1,6 +1,7 @@
 # Binaries
 bin/
 dist/
+tmp/
 
 # Config (may contain secrets)
 config.toml

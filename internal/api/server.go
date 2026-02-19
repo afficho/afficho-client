@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -26,6 +27,8 @@ type Server struct {
 	hub       *Hub
 	tpl       *adminTemplates
 	mux       *chi.Mux
+	version   string
+	startedAt time.Time
 }
 
 // NewServer wires up all routes and returns a ready-to-run Server.
@@ -34,6 +37,7 @@ func NewServer(
 	database *db.DB,
 	mgr *content.Manager,
 	sched *scheduler.Scheduler,
+	version string,
 ) *Server {
 	s := &Server{
 		cfg:       cfg,
@@ -42,6 +46,8 @@ func NewServer(
 		scheduler: sched,
 		hub:       newHub(),
 		tpl:       initAdminTemplates(),
+		version:   version,
+		startedAt: time.Now(),
 	}
 
 	// Broadcast the current item to all display clients whenever the
@@ -88,6 +94,9 @@ func (s *Server) routes() {
 
 	// Read-only status endpoint (useful for monitoring / health checks).
 	r.Get("/api/v1/status", s.handleStatus)
+
+	// Health check endpoint (for watchdogs / load balancers).
+	r.Get("/healthz", s.handleHealthz)
 
 	// ── Authenticated routes ─────────────────────────────────────────────
 	// Protected by requireAuth: skipped when admin password is empty,
@@ -141,6 +150,7 @@ func (s *Server) routes() {
 			r.Get("/storage", s.handleStorageStatus)
 			r.Get("/scheduler/status", s.handleSchedulerStatus)
 			r.Post("/scheduler/next", s.handleSchedulerNext)
+			r.Get("/system", s.handleSystemInfo)
 		})
 	})
 
