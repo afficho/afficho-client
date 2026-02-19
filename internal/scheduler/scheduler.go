@@ -194,15 +194,21 @@ func (s *Scheduler) reloadQueue() error {
 	playlistChanged := s.activePlaylistID != playlistID
 	s.activePlaylistID = playlistID
 
-	// Only reset position when the playlist changed or position is out of bounds.
-	if playlistChanged || s.current >= len(items) {
+	// Reset position and timer when the playlist changed, position is out
+	// of bounds, or the queue was empty and now has items (need to start
+	// the advance timer). Otherwise keep the running timer so items with
+	// duration >= 30s aren't perpetually restarted by the periodic reload.
+	needsReset := playlistChanged || s.current >= len(items) || (len(s.queue) == 0 && len(items) > 0)
+	if needsReset {
 		s.current = 0
+		s.advancedAt = time.Now()
 	}
 	s.queue = items
-	s.advancedAt = time.Now()
 	s.mu.Unlock()
 
-	s.resetTimer()
+	if needsReset {
+		s.resetTimer()
+	}
 	slog.Debug("scheduler: queue reloaded", "items", len(items), "playlist_id", playlistID, "changed", playlistChanged)
 	s.notifyChange()
 	return nil
