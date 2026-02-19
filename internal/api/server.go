@@ -103,6 +103,14 @@ func (s *Server) routes() {
 				r.Post("/{id}/activate", s.activatePlaylist)
 			})
 
+			r.Route("/schedules", func(r chi.Router) {
+				r.Get("/", s.listSchedules)
+				r.Post("/", s.createSchedule)
+				r.Get("/{id}", s.getSchedule)
+				r.Put("/{id}", s.updateSchedule)
+				r.Delete("/{id}", s.deleteSchedule)
+			})
+
 			r.Get("/storage", s.handleStorageStatus)
 			r.Get("/scheduler/status", s.handleSchedulerStatus)
 			r.Post("/scheduler/next", s.handleSchedulerNext)

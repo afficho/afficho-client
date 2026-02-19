@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/afficho/afficho-client/internal/content"
+	"github.com/afficho/afficho-client/internal/scheduler"
 )
 
 // ── Status ────────────────────────────────────────────────────────────────────
@@ -33,11 +34,14 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSchedulerStatus(w http.ResponseWriter, r *http.Request) {
 	current, ok := s.scheduler.Current()
+	activePlaylist := s.scheduler.ActivePlaylistID()
 	respond(w, http.StatusOK, map[string]any{
 		"current":            current,
 		"has_current":        ok,
 		"queue":              s.scheduler.Queue(),
 		"seconds_until_next": s.scheduler.SecondsUntilNext(),
+		"active_playlist_id": activePlaylist,
+		"using_schedule":     activePlaylist != "",
 	})
 }
 
@@ -794,6 +798,223 @@ func (s *Server) fetchPlaylistDetail(id string) (playlistDetail, error) {
 		p.Items = append(p.Items, item)
 	}
 	return p, rows.Err()
+}
+
+// ── Schedules ─────────────────────────────────────────────────────────────────
+
+type scheduleItem struct {
+	ID         string `json:"id"`
+	PlaylistID string `json:"playlist_id"`
+	CronExpr   string `json:"cron_expr"`
+	Priority   int    `json:"priority"`
+	CreatedAt  string `json:"created_at"`
+}
+
+func (s *Server) listSchedules(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.db.Query(`SELECT id, playlist_id, cron_expr, priority, created_at FROM schedules ORDER BY priority DESC`)
+	if err != nil {
+		slog.Error("listing schedules", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	items := make([]scheduleItem, 0)
+	for rows.Next() {
+		var it scheduleItem
+		if err := rows.Scan(&it.ID, &it.PlaylistID, &it.CronExpr, &it.Priority, &it.CreatedAt); err != nil {
+			slog.Error("scanning schedule row", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		items = append(items, it)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("iterating schedule rows", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	respond(w, http.StatusOK, items)
+}
+
+func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PlaylistID string `json:"playlist_id"`
+		CronExpr   string `json:"cron_expr"`
+		Priority   int    `json:"priority"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate playlist exists.
+	var exists int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM playlists WHERE id = ?`, req.PlaylistID).Scan(&exists); err != nil {
+		slog.Error("checking playlist", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if exists == 0 {
+		http.Error(w, "playlist_id not found", http.StatusBadRequest)
+		return
+	}
+
+	// Validate cron expression.
+	if _, err := scheduler.ParseTimeWindow(req.CronExpr); err != nil {
+		http.Error(w, "invalid cron_expr: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.Priority < 0 {
+		http.Error(w, "priority must be >= 0", http.StatusBadRequest)
+		return
+	}
+
+	id := uuid.New().String()
+	_, err := s.db.Exec(`INSERT INTO schedules (id, playlist_id, cron_expr, priority) VALUES (?, ?, ?, ?)`,
+		id, req.PlaylistID, req.CronExpr, req.Priority,
+	)
+	if err != nil {
+		slog.Error("creating schedule", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	it, err := s.fetchSchedule(id)
+	if err != nil {
+		slog.Error("fetching created schedule", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	s.scheduler.TriggerReload()
+	s.BroadcastCurrent()
+	respond(w, http.StatusCreated, it)
+}
+
+func (s *Server) getSchedule(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	it, err := s.fetchSchedule(id)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		slog.Error("getting schedule", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	respond(w, http.StatusOK, it)
+}
+
+func (s *Server) updateSchedule(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	existing, err := s.fetchSchedule(id)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		slog.Error("fetching schedule for update", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	var req struct {
+		PlaylistID *string `json:"playlist_id"`
+		CronExpr   *string `json:"cron_expr"`
+		Priority   *int    `json:"priority"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	playlistID := existing.PlaylistID
+	cronExpr := existing.CronExpr
+	priority := existing.Priority
+
+	if req.PlaylistID != nil {
+		var exists int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM playlists WHERE id = ?`, *req.PlaylistID).Scan(&exists); err != nil {
+			slog.Error("checking playlist", "error", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if exists == 0 {
+			http.Error(w, "playlist_id not found", http.StatusBadRequest)
+			return
+		}
+		playlistID = *req.PlaylistID
+	}
+	if req.CronExpr != nil {
+		if _, err := scheduler.ParseTimeWindow(*req.CronExpr); err != nil {
+			http.Error(w, "invalid cron_expr: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		cronExpr = *req.CronExpr
+	}
+	if req.Priority != nil {
+		if *req.Priority < 0 {
+			http.Error(w, "priority must be >= 0", http.StatusBadRequest)
+			return
+		}
+		priority = *req.Priority
+	}
+
+	_, err = s.db.Exec(`UPDATE schedules SET playlist_id = ?, cron_expr = ?, priority = ? WHERE id = ?`,
+		playlistID, cronExpr, priority, id,
+	)
+	if err != nil {
+		slog.Error("updating schedule", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	updated, err := s.fetchSchedule(id)
+	if err != nil {
+		slog.Error("fetching updated schedule", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	s.scheduler.TriggerReload()
+	s.BroadcastCurrent()
+	respond(w, http.StatusOK, updated)
+}
+
+func (s *Server) deleteSchedule(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var exists int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM schedules WHERE id = ?`, id).Scan(&exists); err != nil {
+		slog.Error("checking schedule", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if exists == 0 {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	if _, err := s.db.Exec(`DELETE FROM schedules WHERE id = ?`, id); err != nil {
+		slog.Error("deleting schedule", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	s.scheduler.TriggerReload()
+	s.BroadcastCurrent()
+	respond(w, http.StatusNoContent, nil)
+}
+
+func (s *Server) fetchSchedule(id string) (scheduleItem, error) {
+	var it scheduleItem
+	err := s.db.QueryRow(`SELECT id, playlist_id, cron_expr, priority, created_at FROM schedules WHERE id = ?`, id).
+		Scan(&it.ID, &it.PlaylistID, &it.CronExpr, &it.Priority, &it.CreatedAt)
+	return it, err
 }
 
 // ── Admin UI ──────────────────────────────────────────────────────────────────

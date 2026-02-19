@@ -29,6 +29,10 @@ type Scheduler struct {
 	queue   []Item
 	current int
 
+	// activePlaylistID tracks which playlist is currently loaded so we
+	// only reset position when the active playlist actually changes.
+	activePlaylistID string
+
 	// advanceTimer fires when the current item's duration expires.
 	advanceTimer *time.Timer
 	// advancedAt records when the current item started displaying.
@@ -171,16 +175,27 @@ func (s *Scheduler) SecondsUntilNext() float64 {
 	return remaining
 }
 
-// reloadQueue queries the database for the active playlist and rebuilds the queue.
+// reloadQueue evaluates schedules, loads the appropriate playlist, and rebuilds the queue.
 func (s *Scheduler) reloadQueue() error {
-	items, err := s.loadDefaultPlaylist()
+	playlistID := s.evaluateSchedules(time.Now())
+
+	var items []Item
+	var err error
+	if playlistID != "" {
+		items, err = s.loadPlaylist(playlistID)
+	} else {
+		items, err = s.loadDefaultPlaylist()
+	}
 	if err != nil {
 		return err
 	}
 
 	s.mu.Lock()
-	// Preserve current position if the queue grew; reset if it shrank or changed.
-	if s.current >= len(items) {
+	playlistChanged := s.activePlaylistID != playlistID
+	s.activePlaylistID = playlistID
+
+	// Only reset position when the playlist changed or position is out of bounds.
+	if playlistChanged || s.current >= len(items) {
 		s.current = 0
 	}
 	s.queue = items
@@ -188,9 +203,16 @@ func (s *Scheduler) reloadQueue() error {
 	s.mu.Unlock()
 
 	s.resetTimer()
-	slog.Debug("scheduler: queue reloaded", "items", len(items))
+	slog.Debug("scheduler: queue reloaded", "items", len(items), "playlist_id", playlistID, "changed", playlistChanged)
 	s.notifyChange()
 	return nil
+}
+
+// ActivePlaylistID returns the ID of the schedule-selected playlist, or "" for default.
+func (s *Scheduler) ActivePlaylistID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.activePlaylistID
 }
 
 // notifyChange calls the OnChange callback if set.
@@ -232,4 +254,72 @@ func (s *Scheduler) loadDefaultPlaylist() ([]Item, error) {
 		items = append(items, it)
 	}
 	return items, rows.Err()
+}
+
+// loadPlaylist loads items from a specific playlist by ID.
+func (s *Scheduler) loadPlaylist(playlistID string) ([]Item, error) {
+	rows, err := s.db.Query(`
+		SELECT
+			ci.id,
+			ci.name,
+			ci.type,
+			ci.source,
+			COALESCE(pi.duration_override_s, ci.duration_s) AS duration_s,
+			ci.allow_popups
+		FROM playlists p
+		JOIN playlist_items pi ON pi.playlist_id = p.id
+		JOIN content_items  ci ON ci.id = pi.content_id
+		WHERE p.id = ?
+		ORDER BY pi.position ASC
+	`, playlistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []Item
+	for rows.Next() {
+		var it Item
+		var popups int
+		if err := rows.Scan(&it.ID, &it.Name, &it.Type, &it.Source, &it.DurationS, &popups); err != nil {
+			return nil, err
+		}
+		it.AllowPopups = popups != 0
+		items = append(items, it)
+	}
+	return items, rows.Err()
+}
+
+// evaluateSchedules checks all schedules and returns the playlist_id of the
+// highest-priority schedule whose time window is currently active.
+// Returns "" if no schedule is active (use the default playlist).
+func (s *Scheduler) evaluateSchedules(now time.Time) string {
+	rows, err := s.db.Query(`
+		SELECT playlist_id, cron_expr, priority
+		FROM schedules
+		ORDER BY priority DESC
+	`)
+	if err != nil {
+		slog.Error("scheduler: querying schedules", "error", err)
+		return ""
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var playlistID, cronExpr string
+		var priority int
+		if err := rows.Scan(&playlistID, &cronExpr, &priority); err != nil {
+			slog.Error("scheduler: scanning schedule row", "error", err)
+			continue
+		}
+		tw, err := ParseTimeWindow(cronExpr)
+		if err != nil {
+			slog.Warn("scheduler: invalid cron_expr, skipping", "expr", cronExpr, "error", err)
+			continue
+		}
+		if tw.IsActive(now) {
+			return playlistID
+		}
+	}
+	return ""
 }
