@@ -228,29 +228,29 @@ one rotation and 30s in another. Content items keep a default duration as a
 fallback, but it should not be a required decision at creation time.
 
 ### Backend
-- [ ] Make `duration_s` on content items default to 10s automatically — stop
+- [x] Make `duration_s` on content items default to 10s automatically — stop
   requiring it in the `POST /api/v1/content` endpoint (treat 0 / missing as
   "use default 10s")
-- [ ] Rename the playlist_items column concept: `duration_override_s` → the
+- [x] Rename the playlist_items column concept: `duration_override_s` → the
   **primary** duration; the content-level value is only the "fallback"
-- [ ] Scheduler: when building the queue, prefer `playlist_items.duration_override_s`;
+- [x] Scheduler: when building the queue, prefer `playlist_items.duration_override_s`;
   only fall back to `content_items.duration_s` if the override is NULL
-  (already works via `COALESCE` — just confirm)
+  (already works via `COALESCE` — confirmed)
 
 ### Admin UI
-- [ ] Content creation form: make duration optional, pre-filled with "10",
+- [x] Content creation form: make duration optional, pre-filled with "10",
   labelled "Default duration (seconds)" with help text "Can be overridden
   per-playlist"
-- [ ] Playlist editor: make the duration column prominent (not a secondary
+- [x] Playlist editor: make the duration column prominent (not a secondary
   override input) — label it "Duration (s)", pre-fill with the content's
   default, let the user change it per-item
-- [ ] Show effective duration in the dashboard queue list (resolved value,
-  not just the content default)
+- [x] Show effective duration in the dashboard queue list (resolved value
+  via scheduler's COALESCE — already correct)
 
 ### REST API
-- [ ] `PUT /api/v1/playlists/{id}/items` — accept `duration_s` (rename from
+- [x] `PUT /api/v1/playlists/{id}/items` — accept `duration_s` (rename from
   `duration_override_s` in the JSON contract) for clarity; backend still
-  stores in `duration_override_s` column
+  stores in `duration_override_s` column; legacy field still accepted
 
 ---
 

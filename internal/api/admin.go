@@ -267,10 +267,9 @@ func (s *Server) adminContentAddForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	durationS, err := strconv.Atoi(durationStr)
-	if err != nil || durationS <= 0 {
-		s.adminRedirect(w, r, "/admin/content", "error", "Duration must be a positive number")
-		return
+	durationS, _ := strconv.Atoi(durationStr)
+	if durationS <= 0 {
+		durationS = 10
 	}
 
 	id := newUUID()
@@ -317,7 +316,7 @@ func (s *Server) adminContentAddForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = s.db.Exec(`
+	_, err := s.db.Exec(`
 		INSERT INTO content_items (id, name, type, source, duration_s, size_bytes, allow_popups)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		id, name, contentType, source, durationS, sizeBytes, popups,
@@ -344,10 +343,9 @@ func (s *Server) adminContentAddUpload(w http.ResponseWriter, r *http.Request) {
 
 	contentType := r.FormValue("type")
 
-	durationS, err := strconv.Atoi(r.FormValue("duration_s"))
-	if err != nil || durationS <= 0 {
-		s.adminRedirect(w, r, "/admin/content", "error", "Duration must be a positive number")
-		return
+	durationS, _ := strconv.Atoi(r.FormValue("duration_s"))
+	if durationS <= 0 {
+		durationS = 10
 	}
 
 	allowPopups := r.FormValue("allow_popups") == "true"

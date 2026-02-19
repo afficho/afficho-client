@@ -21,7 +21,7 @@
       <select id="add-content-select" class="form-select">
         <option value="">Select content...</option>
         {{range .AllContent}}
-        <option value="{{.ID}}" data-name="{{.Name}}" data-type="{{.Type}}">
+        <option value="{{.ID}}" data-name="{{.Name}}" data-type="{{.Type}}" data-duration="{{.DurationS}}">
           {{.Name}} ({{.Type}})
         </option>
         {{end}}
@@ -45,9 +45,9 @@
         <div class="item-name">{{.ContentName}}</div>
         <div class="item-type">{{.ContentType}}</div>
       </div>
-      <input type="number" class="form-input duration-input" placeholder="&#8212;"
-             value="{{if .DurationOverrideS}}{{derefInt .DurationOverrideS}}{{end}}"
-             min="1" title="Duration override (seconds)">
+      <input type="number" class="form-input duration-input"
+             value="{{if .DurationOverrideS}}{{derefInt .DurationOverrideS}}{{else}}{{.ContentDurationS}}{{end}}"
+             min="1" title="Duration (seconds)" placeholder="{{.ContentDurationS}}">
       <span class="remove-btn" onclick="this.closest('.playlist-item').remove(); updateCount()" title="Remove">&#10005;</span>
     </div>
     {{end}}
@@ -88,7 +88,7 @@
         '<div class="item-name">' + escHtml(option.dataset.name) + '</div>' +
         '<div class="item-type">' + escHtml(option.dataset.type) + '</div>' +
       '</div>' +
-      '<input type="number" class="form-input duration-input" placeholder="&#8212;" min="1" title="Duration override (seconds)">' +
+      '<input type="number" class="form-input duration-input" value="' + (option.dataset.duration || '10') + '" min="1" title="Duration (seconds)" placeholder="' + (option.dataset.duration || '10') + '">' +
       '<span class="remove-btn" onclick="this.closest(\'.playlist-item\').remove(); updateCount()" title="Remove">&#10005;</span>';
     itemList.appendChild(div);
     select.selectedIndex = 0;
@@ -105,7 +105,7 @@
     itemList.querySelectorAll('.playlist-item').forEach(function(el) {
       var dur = el.querySelector('.duration-input').value;
       var item = { content_id: el.dataset.contentId };
-      if (dur) item.duration_override_s = parseInt(dur, 10);
+      if (dur) item.duration_s = parseInt(dur, 10);
       items.push(item);
     });
 

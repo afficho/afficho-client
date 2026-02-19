@@ -139,8 +139,7 @@ func (s *Server) createContentJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.DurationS <= 0 {
-		http.Error(w, "duration_s must be > 0", http.StatusBadRequest)
-		return
+		req.DurationS = 10
 	}
 
 	id := uuid.New().String()
@@ -230,10 +229,9 @@ func (s *Server) createContentUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `type must be "image" or "video" for file uploads`, http.StatusBadRequest)
 		return
 	}
-	durationS, err := strconv.Atoi(r.FormValue("duration_s"))
-	if err != nil || durationS <= 0 {
-		http.Error(w, "duration_s must be a positive integer", http.StatusBadRequest)
-		return
+	durationS, _ := strconv.Atoi(r.FormValue("duration_s"))
+	if durationS <= 0 {
+		durationS = 10
 	}
 	allowPopups := r.FormValue("allow_popups") == "true"
 
@@ -488,7 +486,9 @@ type playlistItem struct {
 	ContentName       string `json:"content_name"`
 	ContentType       string `json:"content_type"`
 	Position          int    `json:"position"`
+	DurationS         *int   `json:"duration_s"`
 	DurationOverrideS *int   `json:"duration_override_s"`
+	ContentDurationS  int    `json:"content_duration_s"`
 }
 
 func (s *Server) listPlaylists(w http.ResponseWriter, r *http.Request) {
@@ -591,6 +591,7 @@ func (s *Server) setPlaylistItems(w http.ResponseWriter, r *http.Request) {
 
 	var items []struct {
 		ContentID         string `json:"content_id"`
+		DurationS         *int   `json:"duration_s"`
 		DurationOverrideS *int   `json:"duration_override_s"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
@@ -628,10 +629,15 @@ func (s *Server) setPlaylistItems(w http.ResponseWriter, r *http.Request) {
 
 	for i, item := range items {
 		piID := uuid.New().String()
+		// Accept duration_s (preferred) or legacy duration_override_s.
+		dur := item.DurationS
+		if dur == nil {
+			dur = item.DurationOverrideS
+		}
 		_, err := tx.Exec(`
 			INSERT INTO playlist_items (id, playlist_id, content_id, position, duration_override_s)
 			VALUES (?, ?, ?, ?, ?)`,
-			piID, id, item.ContentID, i, item.DurationOverrideS,
+			piID, id, item.ContentID, i, dur,
 		)
 		if err != nil {
 			_ = tx.Rollback()
@@ -779,7 +785,8 @@ func (s *Server) fetchPlaylistDetail(id string) (playlistDetail, error) {
 	p.IsDefault = def != 0
 
 	rows, err := s.db.Query(`
-		SELECT pi.id, pi.content_id, ci.name, ci.type, pi.position, pi.duration_override_s
+		SELECT pi.id, pi.content_id, ci.name, ci.type, pi.position,
+		       pi.duration_override_s, ci.duration_s
 		FROM playlist_items pi
 		JOIN content_items ci ON ci.id = pi.content_id
 		WHERE pi.playlist_id = ?
@@ -792,9 +799,10 @@ func (s *Server) fetchPlaylistDetail(id string) (playlistDetail, error) {
 	p.Items = make([]playlistItem, 0)
 	for rows.Next() {
 		var item playlistItem
-		if err := rows.Scan(&item.ID, &item.ContentID, &item.ContentName, &item.ContentType, &item.Position, &item.DurationOverrideS); err != nil {
+		if err := rows.Scan(&item.ID, &item.ContentID, &item.ContentName, &item.ContentType, &item.Position, &item.DurationOverrideS, &item.ContentDurationS); err != nil {
 			return p, err
 		}
+		item.DurationS = item.DurationOverrideS
 		p.Items = append(p.Items, item)
 	}
 	return p, rows.Err()

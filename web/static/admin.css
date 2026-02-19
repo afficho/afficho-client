@@ -346,6 +346,13 @@ a:hover { text-decoration: underline; }
   margin-bottom: var(--space-xs);
 }
 
+.form-help {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-slate-400);
+  margin-top: var(--space-xs);
+}
+
 .form-input,
 .form-select,
 .form-textarea {
