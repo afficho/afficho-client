@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/afficho/afficho-client/internal/content"
 	"github.com/afficho/afficho-client/internal/db"
 	"github.com/afficho/afficho-client/internal/scheduler"
+	"github.com/afficho/afficho-client/web"
 )
 
 // Server is the HTTP API and admin UI server.
@@ -22,6 +24,7 @@ type Server struct {
 	content   *content.Manager
 	scheduler *scheduler.Scheduler
 	hub       *Hub
+	tpl       *adminTemplates
 	mux       *chi.Mux
 }
 
@@ -38,6 +41,7 @@ func NewServer(
 		content:   mgr,
 		scheduler: sched,
 		hub:       newHub(),
+		tpl:       initAdminTemplates(),
 	}
 
 	// Broadcast the current item to all display clients whenever the
@@ -59,6 +63,7 @@ func (s *Server) routes() {
 	// without credentials.
 	r.Get("/display", s.handleDisplay)
 	r.Get("/display/current", s.handleDisplayCurrent)
+	r.Get("/display/settings", s.handleDisplaySettings)
 	r.Post("/display/advance", s.handleDisplayAdvance)
 	r.Get("/ws/display", s.handleDisplayWS)
 
@@ -69,6 +74,17 @@ func (s *Server) routes() {
 	r.Handle("/media/*", http.StripPrefix("/media/",
 		http.FileServer(http.Dir(s.content.MediaDir())),
 	))
+
+	// Embedded static assets (CSS, JS, SVGs) — must be accessible for
+	// the login page, so they live outside the auth group.
+	staticSub, _ := fs.Sub(web.FS, "static")
+	r.Handle("/static/*", http.StripPrefix("/static/",
+		http.FileServer(http.FS(staticSub)),
+	))
+
+	// Login page — unauthenticated (renders its own form).
+	r.Get("/admin/login", s.adminLoginPage)
+	r.Post("/admin/login", s.adminLoginSubmit)
 
 	// Read-only status endpoint (useful for monitoring / health checks).
 	r.Get("/api/v1/status", s.handleStatus)
@@ -81,8 +97,19 @@ func (s *Server) routes() {
 
 		// Admin UI
 		r.Get("/", http.RedirectHandler("/admin", http.StatusFound).ServeHTTP)
-		r.Get("/admin", s.handleAdmin)
-		r.Get("/admin/*", s.handleAdmin)
+		r.Get("/admin", s.adminDashboard)
+		r.Get("/admin/content", s.adminContent)
+		r.Post("/admin/content/add", s.adminContentAdd)
+		r.Delete("/admin/content/{id}/delete", s.adminContentDelete)
+		r.Get("/admin/playlists", s.adminPlaylists)
+		r.Post("/admin/playlists/create", s.adminPlaylistCreate)
+		r.Get("/admin/playlists/{id}", s.adminPlaylistEdit)
+		r.Post("/admin/playlists/{id}/activate", s.adminPlaylistActivate)
+		r.Delete("/admin/playlists/{id}/delete", s.adminPlaylistDelete)
+		r.Get("/admin/schedules", s.adminSchedules)
+		r.Post("/admin/schedules/create", s.adminScheduleCreate)
+		r.Delete("/admin/schedules/{id}/delete", s.adminScheduleDelete)
+		r.Post("/admin/display/settings", s.adminDisplaySettings)
 
 		// REST API
 		r.Route("/api/v1", func(r chi.Router) {

@@ -13,21 +13,52 @@
       background: #0F172A;
       font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
+
+    /* ── Double-buffer stage ── */
     #stage {
+      position: relative;
       width: 100%; height: 100%;
+    }
+    .layer {
+      position: absolute; inset: 0;
       display: flex; align-items: center; justify-content: center;
+      visibility: hidden;
+      z-index: 0;
     }
-    #stage img {
+    .layer.active {
+      visibility: visible;
+      z-index: 1;
+    }
+    .layer img {
       width: 100%; height: 100%;
       object-fit: contain;
     }
-    #stage video {
+    .layer video {
       width: 100%; height: 100%;
       object-fit: contain;
     }
-    #stage iframe {
+    .layer iframe {
       width: 100%; height: 100%;
       border: none;
+    }
+
+    /* ── Progress bar ── */
+    #progress-bar {
+      position: fixed;
+      bottom: 0; left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #6C3AED, #2563EB);
+      width: 0%;
+      z-index: 500;
+      display: none;
+    }
+    #progress-bar.active {
+      display: block;
+      animation: progress-fill var(--progress-duration, 10s) linear forwards;
+    }
+    @keyframes progress-fill {
+      from { width: 0%; }
+      to   { width: 100%; }
     }
 
     /* ── Splash / idle state ── */
@@ -124,7 +155,11 @@
   </style>
 </head>
 <body>
-  <div id="stage"></div>
+  <div id="stage">
+    <div id="layer-a" class="layer active"></div>
+    <div id="layer-b" class="layer"></div>
+  </div>
+  <div id="progress-bar"></div>
   <div id="alert-overlay">
     <div class="alert-box">
       <div class="alert-icon">&#9888;</div>
@@ -189,18 +224,28 @@
   </template>
 
   <script>
-    const stage = document.getElementById('stage');
-    const splashTpl = document.getElementById('splash-tpl');
-    const alertOverlay = document.getElementById('alert-overlay');
-    const alertText = alertOverlay.querySelector('.alert-text');
+    var layerA = document.getElementById('layer-a');
+    var layerB = document.getElementById('layer-b');
+    var progressBar = document.getElementById('progress-bar');
+    var splashTpl = document.getElementById('splash-tpl');
+    var alertOverlay = document.getElementById('alert-overlay');
+    var alertText = alertOverlay.querySelector('.alert-text');
 
-    let advanceTimer = null;
-    let alertTimer = null;
+    var advanceTimer = null;
+    var alertTimer = null;
+    var swapTimeout = null;
 
-    // ── Content rendering ──────────────────────────────────────────────
+    // Double-buffer state
+    var activeLayer = 'a'; // 'a' or 'b'
+    var currentItemID = null;
 
-    function render(item) {
-      let el;
+    // Display settings
+    var showProgressBar = false;
+
+    // ── Content rendering (double-buffered) ─────────────────────────────
+
+    function createContentElement(item) {
+      var el;
       switch (item.type) {
         case 'image':
           el = document.createElement('img');
@@ -213,7 +258,7 @@
           el.muted = true;
           el.loop = false;
           el.playsInline = true;
-          el.addEventListener('ended', () => {
+          el.addEventListener('ended', function() {
             fetch('/display/advance', { method: 'POST' });
           });
           break;
@@ -225,19 +270,80 @@
             + (item.allow_popups ? ' allow-popups' : '');
           break;
         default:
-          showSplash('Unknown content type: ' + item.type);
-          return;
+          return null;
       }
-      stage.innerHTML = '';
-      stage.appendChild(el);
+      return el;
+    }
+
+    function getLayer(id) {
+      return id === 'a' ? layerA : layerB;
+    }
+
+    function renderToBackground(item) {
+      var bgKey = activeLayer === 'a' ? 'b' : 'a';
+      var bg = getLayer(bgKey);
+      bg.innerHTML = '';
+
+      var el = createContentElement(item);
+      if (!el) {
+        currentItemID = null;
+        showSplash('Unknown content type: ' + item.type);
+        return;
+      }
+
+      // Cancel any pending swap from a previous transition
+      if (swapTimeout) { clearTimeout(swapTimeout); swapTimeout = null; }
+
+      if (el.tagName === 'IFRAME' || el.tagName === 'IMG') {
+        var swapped = false;
+        var doSwap = function() {
+          if (swapped) return;
+          swapped = true;
+          if (swapTimeout) { clearTimeout(swapTimeout); swapTimeout = null; }
+          swapLayers();
+        };
+        el.addEventListener('load', doSwap, { once: true });
+        // Timeout fallback — swap after 5s even if load doesn't fire
+        bg.appendChild(el);
+        swapTimeout = setTimeout(doSwap, 5000);
+      } else {
+        // Video — swap immediately so autoplay starts
+        bg.appendChild(el);
+        swapLayers();
+      }
+    }
+
+    function swapLayers() {
+      var fgKey = activeLayer;
+      var bgKey = activeLayer === 'a' ? 'b' : 'a';
+      getLayer(bgKey).classList.add('active');
+      getLayer(fgKey).classList.remove('active');
+      // Clear old layer after visual swap
+      setTimeout(function() { getLayer(fgKey).innerHTML = ''; }, 100);
+      activeLayer = bgKey;
     }
 
     function handleCurrent(payload) {
       if (!payload || !payload.type) {
+        currentItemID = null;
         showSplash('No content scheduled');
+        resetProgressBar(0);
         return;
       }
-      render(payload);
+
+      // Same item — skip re-render, just reset the progress bar
+      if (payload.id === currentItemID) {
+        resetProgressBar(payload.duration_s);
+        if (!wsConnected) {
+          schedulePoll(payload.duration_s * 1000);
+        }
+        return;
+      }
+
+      currentItemID = payload.id;
+      renderToBackground(payload);
+      resetProgressBar(payload.duration_s);
+
       // When using polling fallback, schedule the next tick.
       if (!wsConnected) {
         schedulePoll(payload.duration_s * 1000);
@@ -245,19 +351,34 @@
     }
 
     function showSplash(msg) {
-      const clone = splashTpl.content.cloneNode(true);
+      var clone = splashTpl.content.cloneNode(true);
       clone.querySelector('.message').textContent = msg || '';
-      stage.innerHTML = '';
-      stage.appendChild(clone);
+      var fg = getLayer(activeLayer);
+      fg.innerHTML = '';
+      fg.appendChild(clone);
     }
 
-    // ── Alert overlay ──────────────────────────────────────────────────
+    // ── Progress bar ────────────────────────────────────────────────────
+
+    function resetProgressBar(durationS) {
+      if (!showProgressBar || !durationS) {
+        progressBar.classList.remove('active');
+        return;
+      }
+      // Reset animation by removing class, forcing reflow, then re-adding
+      progressBar.classList.remove('active');
+      void progressBar.offsetWidth;
+      progressBar.style.setProperty('--progress-duration', durationS + 's');
+      progressBar.classList.add('active');
+    }
+
+    // ── Alert overlay ───────────────────────────────────────────────────
 
     function showAlert(payload) {
       alertText.textContent = payload.text || '';
       alertOverlay.classList.add('visible');
       if (alertTimer) clearTimeout(alertTimer);
-      const ttl = (payload.ttl_s || 30) * 1000;
+      var ttl = (payload.ttl_s || 30) * 1000;
       alertTimer = setTimeout(hideAlert, ttl);
     }
 
@@ -266,15 +387,33 @@
       if (alertTimer) { clearTimeout(alertTimer); alertTimer = null; }
     }
 
-    // ── WebSocket connection ───────────────────────────────────────────
+    // ── Display settings ────────────────────────────────────────────────
 
-    let ws = null;
-    let wsConnected = false;
-    let wsRetries = 0;
-    const WS_MAX_RETRIES = 10;
+    function applySettings(settings) {
+      if (settings.show_progress_bar !== undefined) {
+        showProgressBar = !!settings.show_progress_bar;
+        if (!showProgressBar) {
+          progressBar.classList.remove('active');
+        }
+      }
+    }
+
+    function fetchSettings() {
+      fetch('/display/settings')
+        .then(function(res) { return res.json(); })
+        .then(function(data) { applySettings(data); })
+        .catch(function() { /* use defaults */ });
+    }
+
+    // ── WebSocket connection ────────────────────────────────────────────
+
+    var ws = null;
+    var wsConnected = false;
+    var wsRetries = 0;
+    var WS_MAX_RETRIES = 10;
 
     function wsUrl() {
-      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       return proto + '//' + location.host + '/ws/display';
     }
 
@@ -287,7 +426,7 @@
         return;
       }
 
-      ws.onopen = () => {
+      ws.onopen = function() {
         console.log('ws: connected');
         wsConnected = true;
         wsRetries = 0;
@@ -295,8 +434,8 @@
         if (advanceTimer) { clearTimeout(advanceTimer); advanceTimer = null; }
       };
 
-      ws.onmessage = (event) => {
-        let msg;
+      ws.onmessage = function(event) {
+        var msg;
         try { msg = JSON.parse(event.data); } catch (e) { return; }
 
         switch (msg.type) {
@@ -309,17 +448,20 @@
           case 'alert':
             showAlert(msg.payload || {});
             break;
+          case 'settings':
+            applySettings(msg.payload || {});
+            break;
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = function() {
         console.log('ws: disconnected');
         wsConnected = false;
         ws = null;
         scheduleReconnect();
       };
 
-      ws.onerror = () => {
+      ws.onerror = function() {
         // onclose fires after onerror, so reconnect is handled there.
         if (ws) ws.close();
       };
@@ -333,34 +475,38 @@
         return;
       }
       // Exponential backoff: 1s, 2s, 4s, 8s, ... capped at 30s.
-      const delay = Math.min(1000 * Math.pow(2, wsRetries - 1), 30000);
+      var delay = Math.min(1000 * Math.pow(2, wsRetries - 1), 30000);
       console.log('ws: reconnecting in ' + delay + 'ms (attempt ' + wsRetries + ')');
       setTimeout(connectWS, delay);
     }
 
-    // ── Polling fallback ───────────────────────────────────────────────
+    // ── Polling fallback ────────────────────────────────────────────────
 
     function schedulePoll(ms) {
       if (advanceTimer) clearTimeout(advanceTimer);
       advanceTimer = setTimeout(tick, ms);
     }
 
-    async function tick() {
-      try {
-        const res = await fetch('/display/current');
-        if (res.status === 204) {
-          showSplash('No content scheduled');
+    function tick() {
+      fetch('/display/current')
+        .then(function(res) {
+          if (res.status === 204) {
+            showSplash('No content scheduled');
+            resetProgressBar(0);
+            schedulePoll(5000);
+            return null;
+          }
+          return res.json();
+        })
+        .then(function(item) {
+          if (!item) return;
+          handleCurrent(item);
+        })
+        .catch(function(e) {
+          console.error('poll error', e);
+          showSplash('Waiting for connection\u2026');
           schedulePoll(5000);
-          return;
-        }
-        const item = await res.json();
-        render(item);
-        schedulePoll(item.duration_s * 1000);
-      } catch (e) {
-        console.error('poll error', e);
-        showSplash('Waiting for connection\u2026');
-        schedulePoll(5000);
-      }
+        });
     }
 
     function startPolling() {
@@ -368,9 +514,10 @@
       tick();
     }
 
-    // ── Boot ───────────────────────────────────────────────────────────
+    // ── Boot ────────────────────────────────────────────────────────────
 
     showSplash('Connecting\u2026');
+    fetchSettings();
     connectWS();
   </script>
 </body>

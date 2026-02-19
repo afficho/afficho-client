@@ -63,3 +63,16 @@ func (s *Server) handleContentRender(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(source))
 }
+
+// handleDisplaySettings returns display preferences from device_meta.
+// Unauthenticated — the display page fetches this on boot.
+func (s *Server) handleDisplaySettings(w http.ResponseWriter, r *http.Request) {
+	var val string
+	err := s.db.QueryRow(`SELECT value FROM device_meta WHERE key = 'show_progress_bar'`).Scan(&val)
+	if err != nil {
+		val = "false"
+	}
+	respond(w, http.StatusOK, map[string]any{
+		"show_progress_bar": val == "true",
+	})
+}

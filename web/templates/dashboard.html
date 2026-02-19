@@ -1,0 +1,102 @@
+{{define "title"}}Dashboard{{end}}
+
+{{define "content"}}
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <p>Overview of your digital signage system</p>
+</div>
+
+<div class="dashboard-grid mb-lg">
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Live Preview</span>
+      {{if .Current}}
+      <span class="badge badge-success">Playing</span>
+      {{else}}
+      <span class="badge badge-warning">Idle</span>
+      {{end}}
+    </div>
+    <div class="preview-container">
+      <iframe src="/display" title="Display preview"></iframe>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Queue</span>
+      <span class="text-muted text-sm">{{len .Queue}} items</span>
+    </div>
+    {{if .Queue}}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Duration</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range $i, $item := .Queue}}
+          <tr{{if eq $i $.CurrentIndex}} style="background:rgba(108,58,237,0.08)"{{end}}>
+            <td class="text-muted">{{add $i 1}}</td>
+            <td>{{$item.Name}}</td>
+            <td><span class="badge badge-type">{{$item.Type}}</span></td>
+            <td class="text-muted">{{$item.DurationS}}s</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}
+    <p class="text-muted text-sm">No items in queue. Add content and configure a playlist to get started.</p>
+    {{end}}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Status</span>
+  </div>
+  <div class="status-grid">
+    <div class="status-item">
+      <div class="value">{{.ActivePlaylistName}}</div>
+      <div class="label">Active Playlist</div>
+    </div>
+    <div class="status-item">
+      <div class="value">{{if .UsingSchedule}}Yes{{else}}No{{end}}</div>
+      <div class="label">Schedule Active</div>
+    </div>
+    <div class="status-item">
+      <div class="value">{{printf "%.0f" .SecondsUntilNext}}s</div>
+      <div class="label">Next Advance</div>
+    </div>
+    <div class="status-item">
+      <div class="value">{{.ContentCount}}</div>
+      <div class="label">Content Items</div>
+    </div>
+    <div class="status-item">
+      <div class="value">{{formatBytes .UsedBytes}}</div>
+      <div class="label">Storage Used</div>
+    </div>
+    <div class="status-item">
+      <div class="value">{{.ConnectedDisplays}}</div>
+      <div class="label">Displays</div>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-lg">
+  <div class="card-header">
+    <span class="card-title">Display Settings</span>
+  </div>
+  <form method="POST" action="/admin/display/settings" class="form-inline" style="padding: 1rem 1.25rem;">
+    <label class="toggle-label">
+      <input type="checkbox" name="show_progress_bar" value="on"{{if .ShowProgressBar}} checked{{end}}>
+      <span>Show progress bar on display</span>
+    </label>
+    <button type="submit" class="btn btn-secondary btn-sm">Save</button>
+  </form>
+</div>
+{{end}}

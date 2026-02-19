@@ -1017,13 +1017,6 @@ func (s *Server) fetchSchedule(id string) (scheduleItem, error) {
 	return it, err
 }
 
-// ── Admin UI ──────────────────────────────────────────────────────────────────
-
-// TODO: Implement admin UI (server-side rendered HTML)
-func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "admin UI not yet implemented — use the REST API", http.StatusNotImplemented)
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 func respond(w http.ResponseWriter, code int, body any) {

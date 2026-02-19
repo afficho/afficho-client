@@ -1,0 +1,132 @@
+{{define "title"}}{{.Playlist.Name}}{{end}}
+
+{{define "content"}}
+<div class="page-header flex justify-between items-center">
+  <div>
+    <h1>
+      {{.Playlist.Name}}
+      {{if .Playlist.IsDefault}}<span class="badge badge-default">Default</span>{{end}}
+    </h1>
+    <p><a href="/admin/playlists">&larr; Back to playlists</a></p>
+  </div>
+  <button class="btn btn-primary" onclick="savePlaylist()">Save Order</button>
+</div>
+
+<div class="card mb-lg">
+  <div class="card-header">
+    <span class="card-title">Add Item</span>
+  </div>
+  <div class="form-inline">
+    <div class="form-group">
+      <select id="add-content-select" class="form-select">
+        <option value="">Select content...</option>
+        {{range .AllContent}}
+        <option value="{{.ID}}" data-name="{{.Name}}" data-type="{{.Type}}">
+          {{.Name}} ({{.Type}})
+        </option>
+        {{end}}
+      </select>
+    </div>
+    <button class="btn btn-secondary" onclick="addItem()">Add</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Items</span>
+    <span class="text-muted text-sm" id="item-count">{{len .Playlist.Items}} items</span>
+  </div>
+
+  <div class="playlist-items" id="playlist-items">
+    {{range .Playlist.Items}}
+    <div class="playlist-item" data-content-id="{{.ContentID}}">
+      <span class="drag-handle">&#9776;</span>
+      <div class="item-info">
+        <div class="item-name">{{.ContentName}}</div>
+        <div class="item-type">{{.ContentType}}</div>
+      </div>
+      <input type="number" class="form-input duration-input" placeholder="&#8212;"
+             value="{{if .DurationOverrideS}}{{derefInt .DurationOverrideS}}{{end}}"
+             min="1" title="Duration override (seconds)">
+      <span class="remove-btn" onclick="this.closest('.playlist-item').remove(); updateCount()" title="Remove">&#10005;</span>
+    </div>
+    {{end}}
+  </div>
+
+  {{if not .Playlist.Items}}
+  <p class="text-muted text-sm mt-md" id="empty-msg">No items yet. Use the form above to add content.</p>
+  {{end}}
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script src="/static/Sortable.min.js"></script>
+<script>
+  var playlistID = {{.Playlist.ID}};
+  var itemList = document.getElementById('playlist-items');
+
+  Sortable.create(itemList, {
+    handle: '.drag-handle',
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+  });
+
+  function addItem() {
+    var select = document.getElementById('add-content-select');
+    var option = select.options[select.selectedIndex];
+    if (!option.value) return;
+
+    var emptyMsg = document.getElementById('empty-msg');
+    if (emptyMsg) emptyMsg.remove();
+
+    var div = document.createElement('div');
+    div.className = 'playlist-item';
+    div.dataset.contentId = option.value;
+    div.innerHTML =
+      '<span class="drag-handle">&#9776;</span>' +
+      '<div class="item-info">' +
+        '<div class="item-name">' + escHtml(option.dataset.name) + '</div>' +
+        '<div class="item-type">' + escHtml(option.dataset.type) + '</div>' +
+      '</div>' +
+      '<input type="number" class="form-input duration-input" placeholder="&#8212;" min="1" title="Duration override (seconds)">' +
+      '<span class="remove-btn" onclick="this.closest(\'.playlist-item\').remove(); updateCount()" title="Remove">&#10005;</span>';
+    itemList.appendChild(div);
+    select.selectedIndex = 0;
+    updateCount();
+  }
+
+  function updateCount() {
+    document.getElementById('item-count').textContent =
+      itemList.querySelectorAll('.playlist-item').length + ' items';
+  }
+
+  function savePlaylist() {
+    var items = [];
+    itemList.querySelectorAll('.playlist-item').forEach(function(el) {
+      var dur = el.querySelector('.duration-input').value;
+      var item = { content_id: el.dataset.contentId };
+      if (dur) item.duration_override_s = parseInt(dur, 10);
+      items.push(item);
+    });
+
+    fetch('/api/v1/playlists/' + playlistID + '/items', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(items),
+    })
+    .then(function(res) {
+      if (!res.ok) return res.text().then(function(t) { throw new Error(t); });
+      window.location.href = '/admin/playlists/' + playlistID + '?flash=success&msg=Playlist+saved';
+    })
+    .catch(function(err) {
+      alert('Failed to save: ' + err.message);
+    });
+  }
+
+  function escHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+</script>
+{{end}}

@@ -1,0 +1,56 @@
+{{define "layout"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{template "title" .}} — Afficho</title>
+  <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+  <link rel="stylesheet" href="/static/admin.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <img class="logo" src="/static/icon.svg" alt="Afficho">
+        <span class="wordmark">afficho</span>
+      </div>
+      <div class="sidebar-nav">
+        <a href="/admin" class="{{if eq .ActiveNav "dashboard"}}active{{end}}">
+          <span class="nav-icon">&#9632;</span> Dashboard
+        </a>
+        <a href="/admin/content" class="{{if eq .ActiveNav "content"}}active{{end}}">
+          <span class="nav-icon">&#9881;</span> Content
+        </a>
+        <a href="/admin/playlists" class="{{if eq .ActiveNav "playlists"}}active{{end}}">
+          <span class="nav-icon">&#9654;</span> Playlists
+        </a>
+        <a href="/admin/schedules" class="{{if eq .ActiveNav "schedules"}}active{{end}}">
+          <span class="nav-icon">&#128339;</span> Schedules
+        </a>
+      </div>
+    </nav>
+
+    <main class="main">
+      {{if .Flash}}
+      <div class="flash flash-{{.FlashType}}">{{.Flash}}</div>
+      {{end}}
+
+      {{template "content" .}}
+    </main>
+  </div>
+
+  <script>
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebar-overlay').classList.toggle('open');
+    }
+  </script>
+  {{template "scripts" .}}
+</body>
+</html>{{end}}
+
+{{define "scripts"}}{{end}}

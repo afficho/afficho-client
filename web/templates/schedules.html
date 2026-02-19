@@ -1,0 +1,97 @@
+{{define "title"}}Schedules{{end}}
+
+{{define "content"}}
+<div class="page-header">
+  <h1>Schedules</h1>
+  <p>Automatically switch playlists based on time windows</p>
+</div>
+
+<div class="card mb-lg">
+  <div class="card-header">
+    <span class="card-title">Create Schedule</span>
+  </div>
+  <form method="POST" action="/admin/schedules/create">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="playlist_id">Playlist</label>
+        <select id="playlist_id" name="playlist_id" class="form-select" required>
+          <option value="">Select playlist...</option>
+          {{range .Playlists}}
+          <option value="{{.ID}}">{{.Name}}{{if .IsDefault}} (default){{end}}</option>
+          {{end}}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="start_time">Start Time</label>
+        <input type="time" id="start_time" name="start_time" class="form-input" required>
+      </div>
+      <div class="form-group">
+        <label for="end_time">End Time</label>
+        <input type="time" id="end_time" name="end_time" class="form-input" required>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="days">Days</label>
+        <select id="days" name="days" class="form-select" required>
+          <option value="everyday">Everyday</option>
+          <option value="weekdays">Weekdays (Mon-Fri)</option>
+          <option value="weekends">Weekends (Sat-Sun)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="priority">Priority</label>
+        <input type="number" id="priority" name="priority" class="form-input" value="0" min="0" required>
+      </div>
+      <div class="form-group">
+        <label>&nbsp;</label>
+        <button type="submit" class="btn btn-primary" style="width:100%">Create Schedule</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+{{if .Schedules}}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Active Schedules</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Playlist</th>
+          <th>Time Window</th>
+          <th>Days</th>
+          <th>Priority</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Schedules}}
+        <tr id="schedule-{{.ID}}">
+          <td>{{.PlaylistName}}</td>
+          <td class="font-mono">{{.TimeRange}}</td>
+          <td>{{.Days}}</td>
+          <td>{{.Priority}}</td>
+          <td>
+            <button class="btn btn-ghost btn-sm"
+                    hx-delete="/admin/schedules/{{.ID}}/delete"
+                    hx-target="#schedule-{{.ID}}"
+                    hx-swap="outerHTML"
+                    hx-confirm="Delete this schedule?">
+              &#10005; Delete
+            </button>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{else}}
+<div class="card" style="text-align:center; padding:3rem">
+  <p class="text-muted">No schedules configured. The default playlist will play at all times.</p>
+</div>
+{{end}}
+{{end}}

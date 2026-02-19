@@ -1,0 +1,57 @@
+{{define "title"}}Playlists{{end}}
+
+{{define "content"}}
+<div class="page-header">
+  <h1>Playlists</h1>
+  <p>Organize content into playlists for display rotation</p>
+</div>
+
+<div class="card mb-lg">
+  <div class="card-header">
+    <span class="card-title">Create Playlist</span>
+  </div>
+  <form method="POST" action="/admin/playlists/create" class="form-inline">
+    <div class="form-group">
+      <input type="text" name="name" class="form-input" placeholder="Playlist name" required>
+    </div>
+    <button type="submit" class="btn btn-primary">Create</button>
+  </form>
+</div>
+
+{{if .Playlists}}
+<div class="card-grid">
+  {{range .Playlists}}
+  <div class="card" id="playlist-{{.ID}}">
+    <div class="card-header">
+      <a href="/admin/playlists/{{.ID}}" class="card-title" style="color:var(--color-white)">
+        {{.Name}}
+      </a>
+      {{if .IsDefault}}
+      <span class="badge badge-default">Default</span>
+      {{end}}
+    </div>
+    <p class="text-muted text-sm mb-md">{{.ItemCount}} items</p>
+    <div class="flex gap-sm">
+      <a href="/admin/playlists/{{.ID}}" class="btn btn-secondary btn-sm">Edit Items</a>
+      {{if not .IsDefault}}
+      <form method="POST" action="/admin/playlists/{{.ID}}/activate" style="display:inline">
+        <button type="submit" class="btn btn-sm btn-ghost">Set Default</button>
+      </form>
+      <button class="btn btn-ghost btn-sm"
+              hx-delete="/admin/playlists/{{.ID}}/delete"
+              hx-target="#playlist-{{.ID}}"
+              hx-swap="outerHTML"
+              hx-confirm="Delete playlist &quot;{{.Name}}&quot;?">
+        &#10005;
+      </button>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<div class="card" style="text-align:center; padding:3rem">
+  <p class="text-muted">No playlists found.</p>
+</div>
+{{end}}
+{{end}}

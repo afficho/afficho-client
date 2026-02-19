@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login — Afficho</title>
+  <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-box">
+      <div class="logo-area">
+        <img src="/static/icon.svg" alt="Afficho">
+        <div class="wordmark">afficho</div>
+      </div>
+
+      {{if .Error}}
+      <div class="login-error">{{.Error}}</div>
+      {{end}}
+
+      <form method="POST" action="/admin/login">
+        <div class="form-group">
+          <label for="password">Admin Password</label>
+          <input type="password" id="password" name="password" class="form-input"
+                 placeholder="Enter password" autofocus required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%">Sign In</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

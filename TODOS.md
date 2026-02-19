@@ -185,23 +185,72 @@ loads them from `/media/`.
 ## Phase 8 — Admin UI
 
 ### Functionality
-- [ ] Login page (shown when password is set and no valid session cookie exists)
-- [ ] Dashboard: current item preview (iframe), queue list, device status strip
-- [ ] Content library: card grid — URL items show favicon + URL, images show thumbnail,
+- [x] Login page (shown when password is set and no valid session cookie exists)
+- [x] Dashboard: current item preview (iframe), queue list, device status strip
+- [x] Content library: card grid — URL items show favicon + URL, images show thumbnail,
   video shows thumbnail + duration badge
-- [ ] Add URL form: name, URL, duration (seconds)
-- [ ] Delete content with confirmation dialog
-- [ ] Playlist editor: drag-to-reorder items, per-item duration override inline
-- [ ] Playlist switcher: create new / activate existing
-- [ ] Storage stats: used / total, item count
-- [ ] Live current-item preview auto-refreshes via WebSocket (reuses `/ws/display`)
+- [x] Add URL form: name, URL, duration (seconds)
+- [x] Delete content with confirmation dialog
+- [x] Playlist editor: drag-to-reorder items, per-item duration override inline
+- [x] Playlist switcher: create new / activate existing
+- [x] Storage stats: used / total, item count
+- [x] Live current-item preview auto-refreshes via WebSocket (reuses `/ws/display`)
 
 ### Technical choices
-- [ ] Server-side rendered templates (`html/template`) + HTMX for dynamic parts
+- [x] Server-side rendered templates (`html/template`) + HTMX for dynamic parts
   - No build step, no JS framework, works well with Go
-- [ ] Embed templates + static assets with `//go:embed web/`
-- [ ] Responsive layout (usable on a phone for on-site content management)
-- [ ] Flash messages (success / error) via cookie or query param
+- [x] Embed templates + static assets with `//go:embed web/`
+- [x] Responsive layout (usable on a phone for on-site content management)
+- [x] Flash messages (success / error) via cookie or query param
+
+---
+
+## Phase 8.6 — Display improvements
+
+### Flash prevention
+- [x] Double-buffer rendering: two layers (`layer-a` / `layer-b`), swap on load
+- [x] Same-item skip: if the incoming item ID matches the current one, skip re-render
+- [x] Timeout fallback: swap after 5s if iframe `load` never fires
+
+### Progress bar
+- [x] Thin gradient bar (3px) at viewport bottom, CSS animation over `duration_s`
+- [x] Setting stored in `device_meta` (`show_progress_bar` key)
+- [x] `GET /display/settings` — unauthenticated endpoint for display page boot
+- [x] `POST /admin/display/settings` — admin toggle on the dashboard
+- [x] WebSocket `settings` message — live update without page reload
+
+---
+
+## Phase 8.5 — Duration belongs to playlists, not content
+
+Duration is primarily a **playlist-level** concern: the same image may need 5s in
+one rotation and 30s in another. Content items keep a default duration as a
+fallback, but it should not be a required decision at creation time.
+
+### Backend
+- [ ] Make `duration_s` on content items default to 10s automatically — stop
+  requiring it in the `POST /api/v1/content` endpoint (treat 0 / missing as
+  "use default 10s")
+- [ ] Rename the playlist_items column concept: `duration_override_s` → the
+  **primary** duration; the content-level value is only the "fallback"
+- [ ] Scheduler: when building the queue, prefer `playlist_items.duration_override_s`;
+  only fall back to `content_items.duration_s` if the override is NULL
+  (already works via `COALESCE` — just confirm)
+
+### Admin UI
+- [ ] Content creation form: make duration optional, pre-filled with "10",
+  labelled "Default duration (seconds)" with help text "Can be overridden
+  per-playlist"
+- [ ] Playlist editor: make the duration column prominent (not a secondary
+  override input) — label it "Duration (s)", pre-fill with the content's
+  default, let the user change it per-item
+- [ ] Show effective duration in the dashboard queue list (resolved value,
+  not just the content default)
+
+### REST API
+- [ ] `PUT /api/v1/playlists/{id}/items` — accept `duration_s` (rename from
+  `duration_override_s` in the JSON contract) for clarity; backend still
+  stores in `duration_override_s` column
 
 ---
 
@@ -267,6 +316,7 @@ loads them from `/media/`.
 
 ## Phase 13 — Packaging & Distribution
 
+- [ ] Use goreleaser for semantic versioning
 - [ ] `.deb` package (using `nfpm`) for Raspberry Pi OS / Debian
 - [ ] Docker image (`FROM debian:bookworm-slim`) for dev/testing
 - [ ] Docker Compose file: daemon + Chromium in headless mode (for CI display tests)

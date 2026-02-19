@@ -1,0 +1,129 @@
+{{define "title"}}Content Library{{end}}
+
+{{define "content"}}
+<div class="page-header flex justify-between items-center">
+  <div>
+    <h1>Content Library</h1>
+    <p>Manage your content items — URLs, images, videos, and HTML snippets</p>
+  </div>
+  <button class="btn btn-primary" onclick="document.getElementById('add-form').classList.toggle('open')">
+    + Add Content
+  </button>
+</div>
+
+<div id="add-form" class="collapsible-content card mb-lg">
+  <div class="card-header">
+    <span class="card-title">Add Content</span>
+  </div>
+
+  <form method="POST" action="/admin/content/add" enctype="multipart/form-data">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" class="form-input" placeholder="My content" required>
+      </div>
+      <div class="form-group">
+        <label for="type">Type</label>
+        <select id="type" name="type" class="form-select" onchange="toggleTypeFields(this.value)">
+          <option value="url">URL (webpage)</option>
+          <option value="image">Image</option>
+          <option value="video">Video</option>
+          <option value="html">HTML Snippet</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="url-field" class="form-group">
+      <label for="url">URL</label>
+      <input type="url" id="url" name="url" class="form-input" placeholder="https://example.com">
+    </div>
+
+    <div id="file-field" class="form-group" style="display:none">
+      <label for="file">File</label>
+      <input type="file" id="file" name="file" class="form-input" accept="image/*,video/*">
+    </div>
+
+    <div id="html-field" class="form-group" style="display:none">
+      <label for="html">HTML Code</label>
+      <textarea id="html" name="html" class="form-textarea" placeholder="<h1>Hello World</h1>"></textarea>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label for="duration_s">Duration (seconds)</label>
+        <input type="number" id="duration_s" name="duration_s" class="form-input" value="10" min="1" required>
+      </div>
+      <div class="form-group">
+        <label>&nbsp;</label>
+        <label class="form-check">
+          <input type="checkbox" name="allow_popups" value="true">
+          Allow popups (iframe sandbox)
+        </label>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Add Content</button>
+  </form>
+</div>
+
+{{if .Items}}
+<div class="card-grid">
+  {{range .Items}}
+  <div class="card content-card" id="content-{{.ID}}">
+    <div class="actions">
+      <button class="btn btn-ghost btn-sm"
+              hx-delete="/admin/content/{{.ID}}/delete"
+              hx-target="#content-{{.ID}}"
+              hx-swap="outerHTML"
+              hx-confirm="Delete &quot;{{.Name}}&quot;? This cannot be undone.">
+        &#10005;
+      </button>
+    </div>
+
+    {{if eq .Type "image"}}
+    <img class="preview-img" src="{{.Source}}" alt="{{.Name}}" loading="lazy">
+    {{end}}
+
+    <span class="type-badge">
+      {{typeIcon .Type}} {{.Type}}
+    </span>
+    <div class="content-name">{{.Name}}</div>
+    {{if eq .Type "url"}}
+    <div class="content-source" title="{{.Source}}">{{.Source}}</div>
+    {{else if eq .Type "html"}}
+    <div class="content-source">HTML snippet</div>
+    {{else}}
+    <div class="content-source">{{.Source}}</div>
+    {{end}}
+    <div class="content-meta">
+      <span>{{.DurationS}}s</span>
+      {{if .SizeBytes}}<span>{{formatBytes .SizeBytes}}</span>{{end}}
+      {{if .AllowPopups}}<span class="badge badge-type">popups</span>{{end}}
+    </div>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<div class="card" style="text-align:center; padding:3rem">
+  <p class="text-muted">No content yet. Click "Add Content" to get started.</p>
+</div>
+{{end}}
+{{end}}
+
+{{define "scripts"}}
+<script>
+function toggleTypeFields(type) {
+  document.getElementById('url-field').style.display = (type === 'url' || type === 'image' || type === 'video') ? '' : 'none';
+  document.getElementById('file-field').style.display = (type === 'image' || type === 'video') ? '' : 'none';
+  document.getElementById('html-field').style.display = (type === 'html') ? '' : 'none';
+
+  var urlInput = document.getElementById('url');
+  var fileInput = document.getElementById('file');
+  if (type === 'url') {
+    urlInput.required = true;
+  } else {
+    urlInput.required = false;
+  }
+}
+</script>
+{{end}}
