@@ -133,6 +133,7 @@ func handleSIGHUP(
 		cfg.Admin.Password = newCfg.Admin.Password
 		cfg.Logging.Debug = newCfg.Logging.Debug
 		cfg.Storage.MaxCacheGB = newCfg.Storage.MaxCacheGB
+		cfg.Security.CORSAllowedOrigins = newCfg.Security.CORSAllowedOrigins
 
 		slog.Info("config reloaded successfully")
 

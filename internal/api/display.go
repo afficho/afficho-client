@@ -99,6 +99,8 @@ func (s *Server) handleContentRender(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy",
+		"default-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self'")
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintf(w, htmlSnippetWrapper, source)
 }

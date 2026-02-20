@@ -9,12 +9,13 @@ import (
 
 // Config holds the complete runtime configuration for the afficho client.
 type Config struct {
-	Server  ServerConfig  `toml:"server"`
-	Admin   AdminConfig   `toml:"admin"`
-	Display DisplayConfig `toml:"display"`
-	Storage StorageConfig `toml:"storage"`
-	Cloud   CloudConfig   `toml:"cloud"`
-	Logging LoggingConfig `toml:"logging"`
+	Server   ServerConfig   `toml:"server"`
+	Admin    AdminConfig    `toml:"admin"`
+	Display  DisplayConfig  `toml:"display"`
+	Storage  StorageConfig  `toml:"storage"`
+	Security SecurityConfig `toml:"security"`
+	Cloud    CloudConfig    `toml:"cloud"`
+	Logging  LoggingConfig  `toml:"logging"`
 }
 
 // AdminConfig controls access to the local admin UI and API.
@@ -52,6 +53,17 @@ type StorageConfig struct {
 	MaxUploadMB int    `toml:"max_upload_mb"`
 }
 
+// SecurityConfig controls CORS, rate limiting, and other security hardening.
+type SecurityConfig struct {
+	// CORSAllowedOrigins restricts cross-origin API requests.
+	// Empty (default) = same-origin only (no CORS headers sent).
+	// ["*"] = allow all origins.
+	CORSAllowedOrigins []string `toml:"cors_allowed_origins"`
+	// UploadConcurrencyLimit caps simultaneous file uploads to prevent disk
+	// exhaustion. Default: 2.
+	UploadConcurrencyLimit int `toml:"upload_concurrency_limit"`
+}
+
 type CloudConfig struct {
 	Enabled  bool   `toml:"enabled"`
 	Endpoint string `toml:"endpoint"`
@@ -80,6 +92,9 @@ func Default() *Config {
 			DataDir:     "/var/lib/afficho",
 			MaxCacheGB:  10,
 			MaxUploadMB: 100,
+		},
+		Security: SecurityConfig{
+			UploadConcurrencyLimit: 2,
 		},
 	}
 }

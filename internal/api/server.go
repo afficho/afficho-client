@@ -58,11 +58,22 @@ func NewServer(
 	return s
 }
 
+// securityHeaders adds baseline security headers to every response.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) routes() {
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(securityHeaders)
 
 	// ── Unauthenticated routes ───────────────────────────────────────────
 	// Display renderer — Chromium on the local device must reach these
@@ -76,10 +87,13 @@ func (s *Server) routes() {
 	// Inline HTML content renderer (iframed by the display page).
 	r.Get("/content/{id}/render", s.handleContentRender)
 
-	// Static media files.
-	r.Handle("/media/*", http.StripPrefix("/media/",
-		http.FileServer(http.Dir(s.content.MediaDir())),
-	))
+	// Static media files (with path traversal defense-in-depth).
+	r.Route("/media", func(r chi.Router) {
+		r.Use(safeMediaMiddleware)
+		r.Handle("/*", http.StripPrefix("/media/",
+			http.FileServer(http.Dir(s.content.MediaDir())),
+		))
+	})
 
 	// Embedded static assets (CSS, JS, SVGs) — must be accessible for
 	// the login page, so they live outside the auth group.
@@ -122,9 +136,11 @@ func (s *Server) routes() {
 
 		// REST API
 		r.Route("/api/v1", func(r chi.Router) {
+			r.Use(s.corsMiddleware)
+
 			r.Route("/content", func(r chi.Router) {
 				r.Get("/", s.listContent)
-				r.Post("/", s.createContent)
+				r.With(middleware.Throttle(s.cfg.Security.UploadConcurrencyLimit)).Post("/", s.createContent)
 				r.Get("/{id}", s.getContent)
 				r.Patch("/{id}", s.updateContent)
 				r.Delete("/{id}", s.deleteContent)

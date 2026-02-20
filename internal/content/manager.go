@@ -152,7 +152,7 @@ func (m *Manager) DownloadMedia(id, rawURL, declaredType string) (localPath stri
 func (m *Manager) Delete(localPath string) error {
 	// Guard against deleting files outside the media directory.
 	rel, err := filepath.Rel(m.mediaDir, localPath)
-	if err != nil || rel == "" || rel[0] == '.' {
+	if err != nil || rel == "" || rel[0] == '.' || strings.ContainsRune(localPath, 0) {
 		return fmt.Errorf("path %q is outside media directory", localPath)
 	}
 	return os.Remove(localPath)

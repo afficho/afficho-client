@@ -49,6 +49,16 @@ max_cache_gb = 10
 # Maximum file size for a single upload (megabytes).
 max_upload_mb = 100
 
+[security]
+# CORS: list of allowed origins for /api/v1 cross-origin requests.
+# Empty (default) = same-origin only (no CORS headers sent).
+# Uncomment and add origins if you access the API from a different domain.
+# cors_allowed_origins = ["https://dashboard.example.com"]
+
+# Maximum concurrent file uploads. Prevents disk exhaustion from
+# parallel large uploads. Default: 2. Requires restart to change.
+# upload_concurrency_limit = 2
+
 [cloud]
 # Afficho Cloud sync (not yet implemented).
 enabled = false

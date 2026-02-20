@@ -272,7 +272,9 @@
         case 'html':
           el = document.createElement('iframe');
           el.src = '/content/' + item.id + '/render';
-          el.sandbox = 'allow-scripts allow-same-origin allow-forms'
+          // Tighter sandbox for admin-authored HTML: no same-origin access
+          // (opaque origin prevents cookie/storage access) and no forms.
+          el.sandbox = 'allow-scripts'
             + (item.allow_popups ? ' allow-popups' : '');
           break;
         default:

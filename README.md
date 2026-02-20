@@ -111,10 +111,86 @@ These routes remain **unauthenticated** (Chromium on the device needs them):
 
 When the password is empty (the default), authentication is disabled entirely.
 
-> **Security note:** The CE password protects against casual access on a local
-> network. Do not expose port 8080 to the internet without a reverse proxy
-> (nginx, Caddy) providing TLS. Enterprise authentication (SSO, RBAC) is
-> handled by the Afficho Cloud web console, not by this daemon.
+## Security
+
+The Community Edition is designed for **local network** deployments.
+The admin password protects against casual access but is not a substitute
+for proper network security.
+
+### Recommendations
+
+- **Do not expose port 8080 to the internet** without a reverse proxy
+  providing TLS (see below).
+- Set a strong `admin.password` in your config file.
+- Keep the daemon updated to receive security patches.
+
+### HTTPS via Reverse Proxy
+
+Afficho does not handle TLS directly. For HTTPS, place a reverse proxy
+in front of the daemon.
+
+**Nginx:**
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name signage.example.com;
+
+    ssl_certificate     /etc/ssl/certs/signage.pem;
+    ssl_certificate_key /etc/ssl/private/signage.key;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # WebSocket support for live display updates.
+    location /ws/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+**Caddy** (automatic HTTPS via Let's Encrypt):
+
+```caddyfile
+signage.example.com {
+    reverse_proxy localhost:8080
+}
+```
+
+Caddy handles WebSocket upgrades and TLS certificates automatically.
+
+### CORS
+
+By default, no CORS headers are sent — the browser's same-origin policy
+blocks cross-origin API requests. To allow specific origins (e.g., a
+separate management dashboard), configure `security.cors_allowed_origins`
+in `config.toml`:
+
+```toml
+[security]
+cors_allowed_origins = ["https://dashboard.example.com"]
+```
+
+### Upload Limits
+
+File uploads are limited to the configured `storage.max_upload_mb`
+(default: 100 MB) per file. Concurrent uploads are throttled to prevent
+disk exhaustion (default: 2 simultaneous uploads).
+
+### Enterprise Security
+
+SSO, RBAC, and audit logging are handled by the Afficho Cloud web
+console (Enterprise Edition), not by this daemon.
 
 ## API
 
@@ -133,7 +209,7 @@ The daemon exposes a REST API at `/api/v1`. All responses are JSON.
 | `GET` | `/api/v1/scheduler/status` | Queue + current item |
 | `POST` | `/api/v1/scheduler/next` | Force advance to next item |
 
-> Note: Most endpoints are not yet implemented — see [TODOS.md](./TODOS.md).
+> See [TODOS.md](./TODOS.md) for planned features and progress.
 
 ## Content Types
 

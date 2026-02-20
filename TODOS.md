@@ -277,13 +277,15 @@ fallback, but it should not be a required decision at creation time.
 ## Phase 10 — Security
 
 - [x] Auth design decided: CE = single config password, EE = cloud console SSO/RBAC
-- [ ] Implement `requireAuth()` middleware (see Phase 2)
-- [ ] CORS: restrict `/api/v1` to same origin by default; configurable allowlist
-- [ ] Rate limiting on upload endpoint (prevent disk fill)
-- [ ] Path traversal audit on `/media/` file server
-- [ ] iframe sandbox policy review per content type (Phase 4–5)
-- [ ] Optional TLS: document reverse-proxy setup (nginx / Caddy) for HTTPS
-- [ ] Security note in README: do not expose port 8080 to the internet unprotected
+- [x] `requireAuth()` middleware (completed in Phase 2)
+- [x] CORS: restrict `/api/v1` to same origin by default; configurable allowlist
+- [x] Rate limiting on upload endpoint (prevent disk fill)
+- [x] Path traversal audit on `/media/` file server
+- [x] iframe sandbox policy review per content type (Phase 4–5)
+- [x] Optional TLS: document reverse-proxy setup (nginx / Caddy) for HTTPS
+- [x] Security note in README: do not expose port 8080 to the internet unprotected
+- [x] Security response headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`)
+- [x] CSP header for inline HTML content rendering
 
 ---
 
