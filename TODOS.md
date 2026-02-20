@@ -291,15 +291,19 @@ fallback, but it should not be a required decision at creation time.
 
 ## Phase 11 — Testing
 
-- [ ] Unit: config loading (defaults, file override, missing file)
-- [ ] Unit: scheduler queue logic (advance, wrap-around, empty queue, reload)
-- [ ] Unit: content manager path traversal guard
-- [ ] Unit: `requireAuth` middleware (with / without password, valid / invalid token)
-- [ ] Integration: REST API via `net/http/httptest`
-  - Add URL → create playlist → activate → GET `/display/current` → correct item
-- [ ] Integration: WebSocket — connect, receive `current`, trigger advance, receive new `current`
-- [ ] Integration: graceful shutdown under in-flight requests
-- [ ] Benchmark: scheduler `Current()` under concurrent read load
+- [x] Unit: config loading (defaults, file override, missing file)
+- [x] Unit: scheduler queue logic (advance, wrap-around, empty queue, reload)
+- [x] Unit: scheduler TimeWindow parsing and IsActive evaluation
+- [x] Unit: content manager path traversal guard
+- [x] Unit: content manager media type validation (magic bytes)
+- [x] Unit: `requireAuth` middleware (with / without password, valid / invalid token)
+- [x] Unit: CORS middleware (same-origin, allowlist, wildcard, preflight)
+- [x] Unit: safe media middleware (null bytes, dotfiles)
+- [x] Unit: WebSocket Hub (register, unregister, broadcast, slow-client drop)
+- [x] Integration: REST API via `net/http/httptest`
+  - Content CRUD, playlist CRUD, status, healthz, storage, display, auth enforcement
+- [x] Integration: DB migrations (tables created, default playlist seeded, schema version)
+- [x] Benchmark: scheduler `Current()` under concurrent read load
 
 ---
 
