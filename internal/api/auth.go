@@ -37,26 +37,37 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			}
 		}
 
-		// 2. Fall back to HTTP Basic Auth.
+		// 2. Fall back to HTTP Basic Auth (API clients).
 		_, pass, ok := r.BasicAuth()
-		if !ok || subtle.ConstantTimeCompare([]byte(pass), []byte(password)) != 1 {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Afficho Admin"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		if ok && subtle.ConstantTimeCompare([]byte(pass), []byte(password)) == 1 {
+			// Auth succeeded — issue a session cookie to avoid re-prompting.
+			http.SetCookie(w, &http.Cookie{
+				Name:     sessionCookieName,
+				Value:    s.signSession(password),
+				Path:     "/",
+				MaxAge:   int(sessionMaxAge.Seconds()),
+				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
+			})
+			next.ServeHTTP(w, r)
 			return
 		}
 
-		// 3. Auth succeeded — issue a session cookie to avoid re-prompting.
-		http.SetCookie(w, &http.Cookie{
-			Name:     sessionCookieName,
-			Value:    s.signSession(password),
-			Path:     "/",
-			MaxAge:   int(sessionMaxAge.Seconds()),
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		})
+		// 3. Not authenticated — redirect browsers to login page,
+		// return 401 for API clients.
+		if isBrowserRequest(r) {
+			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		} else {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		}
 
-		next.ServeHTTP(w, r)
 	})
+}
+
+// isBrowserRequest returns true if the request likely comes from a browser
+// (accepts HTML) rather than an API client.
+func isBrowserRequest(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "text/html")
 }
 
 // signSession creates a token of the form "expiry_unix:hmac_hex".

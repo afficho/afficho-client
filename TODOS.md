@@ -274,22 +274,7 @@ fallback, but it should not be a required decision at creation time.
 
 ---
 
-## Phase 10 — Cloud Sync (Afficho Cloud / EE)
-
-- [ ] Generate stable device ID on first run (UUIDv4, stored in `device_meta`)
-- [ ] Device registration: POST device info (ID, hostname, IP, arch, version) to cloud
-- [ ] Heartbeat: periodic POST with current status (playing item, uptime, storage)
-- [ ] Receive updates from cloud: new playlist, new content URLs, config changes
-- [ ] Content download: fetch from cloud-provided signed URLs → local media cache
-- [ ] Auth token storage in `device_meta`, refresh before expiry
-- [ ] Offline resilience: operate fully from local DB when cloud is unreachable
-- [ ] `GET /api/v1/cloud/status` — device ID, last sync, connection state
-- [ ] Protocol: WebSocket (persistent, bidirectional) — reuse the message envelope
-  from Phase 3; cloud sends same `current` / `alert` / `reload` messages
-
----
-
-## Phase 11 — Security
+## Phase 10 — Security
 
 - [x] Auth design decided: CE = single config password, EE = cloud console SSO/RBAC
 - [ ] Implement `requireAuth()` middleware (see Phase 2)
@@ -302,7 +287,7 @@ fallback, but it should not be a required decision at creation time.
 
 ---
 
-## Phase 12 — Testing
+## Phase 11 — Testing
 
 - [ ] Unit: config loading (defaults, file override, missing file)
 - [ ] Unit: scheduler queue logic (advance, wrap-around, empty queue, reload)
@@ -316,7 +301,7 @@ fallback, but it should not be a required decision at creation time.
 
 ---
 
-## Phase 13 — Packaging & Distribution
+## Phase 12 — Packaging & Distribution
 
 - [ ] Use goreleaser for semantic versioning
 - [ ] `.deb` package (using `nfpm`) for Raspberry Pi OS / Debian
@@ -329,6 +314,8 @@ fallback, but it should not be a required decision at creation time.
 
 ## Backlog / Nice to Have
 
+- [ ] **Cache eviction** when `storage.max_cache_gb` is exceeded (LRU — delete items
+  not in any active playlist first, then oldest by last-played)
 - [ ] **Emergency alert overlay** — cloud-pushed message that pre-empts all content,
   shown as a banner or full-screen takeover (WebSocket `alert` message, Phase 3)
 - [ ] **Ticket / queue display** — push structured data (e.g. customer number) to the
@@ -343,3 +330,20 @@ fallback, but it should not be a required decision at creation time.
 - [ ] **Prometheus metrics** endpoint (`/metrics`)
 - [ ] **Content editor** — basic text-on-colour slide compositor in the admin UI
 - [ ] **Android companion app** — WebView wrapper pointing at `http://device-ip:8080`
+
+---
+
+## Backlog / Cloud Sync (Afficho Cloud / EE)
+
+No cloud backend exists yet. These items are parked until the cloud platform is built.
+
+- [ ] Generate stable device ID on first run (UUIDv4, stored in `device_meta`)
+- [ ] Device registration: POST device info (ID, hostname, IP, arch, version) to cloud
+- [ ] Heartbeat: periodic POST with current status (playing item, uptime, storage)
+- [ ] Receive updates from cloud: new playlist, new content URLs, config changes
+- [ ] Content download: fetch from cloud-provided signed URLs → local media cache
+- [ ] Auth token storage in `device_meta`, refresh before expiry
+- [ ] Offline resilience: operate fully from local DB when cloud is unreachable
+- [ ] `GET /api/v1/cloud/status` — device ID, last sync, connection state
+- [ ] Protocol: WebSocket (persistent, bidirectional) — reuse the message envelope
+  from Phase 3; cloud sends same `current` / `alert` / `reload` messages

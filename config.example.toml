@@ -12,7 +12,7 @@ port = 8080
 # Password for the admin UI and API write endpoints (Community Edition).
 # If empty, authentication is disabled — only do this on a trusted network.
 # Enterprise Edition: SSO and RBAC are handled by the Afficho Cloud console.
-password = ""
+password = "changeme"
 
 [display]
 # Set to true on production devices to automatically launch the browser.
