@@ -309,12 +309,16 @@ fallback, but it should not be a required decision at creation time.
 
 ## Phase 12 — Packaging & Distribution
 
-- [ ] Use goreleaser for semantic versioning
-- [ ] `.deb` package (using `nfpm`) for Raspberry Pi OS / Debian
-- [ ] Docker image (`FROM debian:bookworm-slim`) for dev/testing
-- [ ] Docker Compose file: daemon + Chromium in headless mode (for CI display tests)
+- [x] Use goreleaser for semantic versioning (`.goreleaser.yaml` — builds, archives, changelog)
+- [x] `.deb` package (using `nfpm`) for Raspberry Pi OS / Debian (nfpm via goreleaser)
+- [x] Docker image (`FROM debian:bookworm-slim`) for dev/testing (`Dockerfile`)
+- [x] Docker Compose file: daemon + Chromium in headless mode (`docker-compose.yml`)
 - [ ] Raspberry Pi OS image recipe (pi-gen) for zero-setup SD card flashing
-- [ ] Auto-update: check GitHub releases API, download, verify checksum, replace binary
+  — **Deferred**: `.deb` package covers 90% of use cases; pi-gen adds value when
+  Afficho Cloud (EE) exists for fleet provisioning
+- [x] Auto-update: check GitHub releases API, download, verify checksum, stage binary
+  (`internal/updater/`), API endpoints (`GET /api/v1/update/status`,
+  `POST /api/v1/update/check`)
 
 ---
 

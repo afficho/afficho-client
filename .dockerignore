@@ -1,0 +1,7 @@
+.git
+bin/
+dist/
+tmp/
+data/
+coverage.out
+*.tar.gz

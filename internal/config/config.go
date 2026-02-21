@@ -15,6 +15,7 @@ type Config struct {
 	Storage  StorageConfig  `toml:"storage"`
 	Security SecurityConfig `toml:"security"`
 	Cloud    CloudConfig    `toml:"cloud"`
+	Update   UpdateConfig   `toml:"update"`
 	Logging  LoggingConfig  `toml:"logging"`
 }
 
@@ -71,6 +72,17 @@ type CloudConfig struct {
 	Token    string `toml:"token"`
 }
 
+// UpdateConfig controls automatic updates from GitHub releases.
+type UpdateConfig struct {
+	// Enabled turns on periodic update checks. Default: false (opt-in).
+	Enabled bool `toml:"enabled"`
+	// CheckInterval is how often to poll for new releases (e.g. "6h", "24h").
+	CheckInterval string `toml:"check_interval"`
+	// Channel selects the update stream: "stable" (tagged releases only) or
+	// "pre-release" (includes pre-releases).
+	Channel string `toml:"channel"`
+}
+
 type LoggingConfig struct {
 	Debug bool `toml:"debug"`
 }
@@ -95,6 +107,11 @@ func Default() *Config {
 		},
 		Security: SecurityConfig{
 			UploadConcurrencyLimit: 2,
+		},
+		Update: UpdateConfig{
+			Enabled:       false,
+			CheckInterval: "24h",
+			Channel:       "stable",
 		},
 	}
 }

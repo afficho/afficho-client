@@ -1,0 +1,20 @@
+# Dockerfile used by GoReleaser — receives a pre-built binary.
+FROM debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN useradd --system --no-create-home --shell /usr/sbin/nologin afficho && \
+    mkdir -p /var/lib/afficho /var/log/afficho /etc/afficho && \
+    chown afficho:afficho /var/lib/afficho /var/log/afficho
+
+COPY afficho /usr/local/bin/afficho
+COPY config.example.toml /etc/afficho/config.toml
+
+USER afficho
+EXPOSE 8080
+VOLUME ["/var/lib/afficho"]
+
+ENTRYPOINT ["/usr/local/bin/afficho"]
+CMD ["-config", "/etc/afficho/config.toml"]

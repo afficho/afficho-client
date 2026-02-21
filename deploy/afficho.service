@@ -7,6 +7,16 @@ Wants=network-online.target
 Type=simple
 User=afficho
 Group=afficho
+
+# Apply staged auto-update (if any) before starting the daemon.
+# Runs as root (before User= takes effect) so it can replace the binary.
+ExecStartPre=/bin/sh -c '\
+  if [ -f /var/lib/afficho/.update/pending ]; then \
+    mv /var/lib/afficho/.update/afficho.new /usr/local/bin/afficho && \
+    rm -f /var/lib/afficho/.update/pending && \
+    echo "Applied staged update"; \
+  fi'
+
 ExecStart=/usr/local/bin/afficho -config /etc/afficho/config.toml
 Restart=on-failure
 RestartSec=5

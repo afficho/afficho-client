@@ -14,10 +14,14 @@ import (
 	"github.com/afficho/afficho-client/internal/db"
 	"github.com/afficho/afficho-client/internal/display"
 	"github.com/afficho/afficho-client/internal/scheduler"
+	"github.com/afficho/afficho-client/internal/updater"
 )
 
-// version is overridden at build time via -ldflags "-X main.version=v1.2.3".
-var version = "dev"
+// version and goarm are overridden at build time via ldflags.
+var (
+	version = "dev"
+	goarm   = "" //nolint:gochecknoglobals // set via -ldflags for ARM builds
+)
 
 func main() {
 	configPath := flag.String("config", "/etc/afficho/config.toml", "path to config file")
@@ -79,6 +83,16 @@ func main() {
 	sighup := make(chan os.Signal, 1)
 	signal.Notify(sighup, syscall.SIGHUP)
 	go handleSIGHUP(sighup, *configPath, cfg, logLevel, sched)
+
+	// ── Auto-updater ─────────────────────────────────────────────────────
+	upd, updErr := updater.New(version, goarm, cfg)
+	if updErr != nil {
+		slog.Error("failed to initialise updater", "error", updErr)
+	}
+	if upd != nil {
+		server.SetUpdater(upd)
+		go upd.Run(ctx)
+	}
 
 	// ── Screen power schedule ─────────────────────────────────────────────
 	if screenCtrl := display.NewScreenController(cfg); screenCtrl != nil {

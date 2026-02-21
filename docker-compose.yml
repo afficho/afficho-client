@@ -1,0 +1,51 @@
+# Afficho Client — Docker Compose
+#
+# Starts the daemon and a headless Chromium browser for dev/testing.
+#
+# Usage:
+#   docker compose up -d --build     # start
+#   docker compose down -v           # stop and clean up
+
+services:
+  afficho:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: dev
+    container_name: afficho
+    ports:
+      - "8080:8080"
+    volumes:
+      - afficho-data:/var/lib/afficho
+      - ./config.example.toml:/etc/afficho/config.toml:ro
+    networks:
+      - signage
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  chromium:
+    image: browserless/chromium:latest
+    container_name: afficho-chromium
+    environment:
+      - CONNECTION_TIMEOUT=600000
+      - DEFAULT_LAUNCH_ARGS=--no-sandbox,--disable-gpu,--disable-dev-shm-usage
+    ports:
+      - "3000:3000"
+    networks:
+      - signage
+    depends_on:
+      afficho:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  afficho-data:
+
+networks:
+  signage:
+    driver: bridge

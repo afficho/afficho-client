@@ -15,6 +15,7 @@ import (
 	"github.com/afficho/afficho-client/internal/content"
 	"github.com/afficho/afficho-client/internal/db"
 	"github.com/afficho/afficho-client/internal/scheduler"
+	"github.com/afficho/afficho-client/internal/updater"
 	"github.com/afficho/afficho-client/web"
 )
 
@@ -24,11 +25,18 @@ type Server struct {
 	db        *db.DB
 	content   *content.Manager
 	scheduler *scheduler.Scheduler
+	updater   *updater.Updater
 	hub       *Hub
 	tpl       *adminTemplates
 	mux       *chi.Mux
 	version   string
 	startedAt time.Time
+}
+
+// SetUpdater attaches the auto-updater to the server so update status
+// can be exposed via the API. Must be called before Run.
+func (s *Server) SetUpdater(u *updater.Updater) {
+	s.updater = u
 }
 
 // NewServer wires up all routes and returns a ready-to-run Server.
@@ -167,6 +175,8 @@ func (s *Server) routes() {
 			r.Get("/scheduler/status", s.handleSchedulerStatus)
 			r.Post("/scheduler/next", s.handleSchedulerNext)
 			r.Get("/system", s.handleSystemInfo)
+			r.Get("/update/status", s.handleUpdateStatus)
+			r.Post("/update/check", s.handleUpdateCheck)
 		})
 	})
 

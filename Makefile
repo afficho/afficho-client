@@ -1,5 +1,6 @@
 .PHONY: build build-all build-amd64 build-arm64 build-armv7 build-armv6
 .PHONY: test lint clean run dev dev-watch tidy
+.PHONY: goreleaser-check goreleaser-snapshot docker compose-up compose-down
 
 BINARY  := afficho
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -55,6 +56,26 @@ dev:
 ## dev-watch: Run with hot-reload (rebuilds on file changes)
 dev-watch:
 	air
+
+## goreleaser-check: Validate .goreleaser.yaml
+goreleaser-check:
+	goreleaser check
+
+## goreleaser-snapshot: Build a local snapshot (no publish)
+goreleaser-snapshot:
+	goreleaser release --snapshot --clean
+
+## docker: Build Docker image locally
+docker:
+	docker build -t afficho-client:dev --build-arg VERSION=$(VERSION) .
+
+## compose-up: Start Docker Compose stack
+compose-up:
+	docker compose up -d --build
+
+## compose-down: Stop Docker Compose stack
+compose-down:
+	docker compose down -v
 
 ## help: Show this help
 help:

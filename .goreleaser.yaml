@@ -1,0 +1,131 @@
+# GoReleaser configuration for Afficho Client.
+# Docs: https://goreleaser.com
+#
+# Local test: goreleaser release --snapshot --clean
+# Validate:   goreleaser check
+version: 2
+
+project_name: afficho-client
+
+builds:
+  - id: afficho
+    main: ./cmd/afficho
+    binary: afficho
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "6"
+      - "7"
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.goarm={{.Arm}}
+
+archives:
+  - id: tarballs
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_linux-{{ if eq .Arch "amd64" }}amd64{{ else if eq .Arch "arm64" }}arm64{{ else if and (eq .Arch "arm") (eq .Arm "7") }}armv7{{ else }}armv6{{ end }}
+    files:
+      - deploy/afficho.service
+      - deploy/logrotate.d/afficho
+      - config.example.toml
+      - scripts/install.sh
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: afficho
+    name: afficho-client
+  prerelease: auto
+  header: |
+    ## Afficho Client {{ .Version }}
+  footer: |
+    **Full Changelog**: https://github.com/afficho/afficho-client/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+# ── .deb packages via nfpm ───────────────────────────────────────────────────
+
+nfpms:
+  - id: deb
+    package_name: afficho-client
+    vendor: Afficho
+    homepage: https://github.com/afficho/afficho-client
+    maintainer: Afficho <hello@afficho.io>
+    description: Digital signage client daemon for Raspberry Pi and Linux
+    license: Apache-2.0
+    formats:
+      - deb
+    bindir: /usr/local/bin
+    dependencies: []
+    recommends:
+      - chromium-browser | chromium | google-chrome-stable
+    contents:
+      - src: deploy/afficho.service
+        dst: /etc/systemd/system/afficho.service
+        type: config
+      - src: deploy/logrotate.d/afficho
+        dst: /etc/logrotate.d/afficho
+        type: config
+      - src: config.example.toml
+        dst: /etc/afficho/config.toml
+        type: config|noreplace
+    scripts:
+      preinstall: deploy/scripts/preinstall.sh
+      postinstall: deploy/scripts/postinstall.sh
+      preremove: deploy/scripts/preremove.sh
+
+# ── Docker images ────────────────────────────────────────────────────────────
+
+dockers:
+  - image_templates:
+      - "ghcr.io/afficho/afficho-client:{{ .Version }}-amd64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+    dockerfile: Dockerfile.goreleaser
+    goos: linux
+    goarch: amd64
+
+  - image_templates:
+      - "ghcr.io/afficho/afficho-client:{{ .Version }}-arm64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+    dockerfile: Dockerfile.goreleaser
+    goos: linux
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "ghcr.io/afficho/afficho-client:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/afficho/afficho-client:{{ .Version }}-amd64"
+      - "ghcr.io/afficho/afficho-client:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/afficho/afficho-client:latest"
+    image_templates:
+      - "ghcr.io/afficho/afficho-client:{{ .Version }}-amd64"
+      - "ghcr.io/afficho/afficho-client:{{ .Version }}-arm64"

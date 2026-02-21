@@ -66,6 +66,17 @@ endpoint = "https://api.afficho.io"
 device_id = ""
 token = ""
 
+[update]
+# Automatic updates from GitHub releases. Disabled by default.
+# When enabled, the daemon periodically checks for new releases,
+# downloads the binary, verifies its SHA256 checksum, and stages
+# the update. A service restart applies the new version.
+enabled = false
+# How often to check for updates. Valid units: h (hours), m (minutes).
+check_interval = "24h"
+# Update channel: "stable" (only tagged releases) or "pre-release".
+channel = "stable"
+
 [logging]
 # Set to true for verbose debug output.
 debug = false

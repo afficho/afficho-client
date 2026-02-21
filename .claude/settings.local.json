@@ -8,7 +8,10 @@
       "Bash(go mod tidy:*)",
       "Bash(make build-all:*)",
       "Bash(go build:*)",
-      "Bash(make test:*)"
+      "Bash(make test:*)",
+      "Bash(ls:*)",
+      "Bash(go test:*)",
+      "Bash(golangci-lint run:*)"
     ]
   }
 }
