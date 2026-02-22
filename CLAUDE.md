@@ -61,4 +61,6 @@ go mod tidy       # after adding/removing imports
   broadcast a WebSocket `current` message.
 - All JSON responses go through the `respond(w, code, body)` helper in `handlers.go`.
 - Keep handler files thin — business logic belongs in `internal/` packages.
-- Coporate Design is found in `Styleguide.md` and should be adhered to
+- Corporate design: the canonical style guide lives in `../afficho-brand/Styleguide.md`.
+  The local `Styleguide.md` is a pointer. Brand assets (icon.svg, logo.svg) in
+  `web/static/` are copies — update from `../afficho-brand/assets/` when they change.

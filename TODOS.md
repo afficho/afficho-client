@@ -322,6 +322,348 @@ fallback, but it should not be a required decision at creation time.
 
 ---
 
+## Phase 13 — Google Cast Integration
+
+Cast content to Chromecast / Google Cast devices on the local network.
+The daemon acts as a Cast **sender** — it discovers Cast devices via mDNS,
+connects to them, and pushes content using the same scheduler that drives
+the local Chromium display.
+
+### 13A — Discovery & configuration
+
+- [ ] Add `[cast]` config section:
+  ```toml
+  [cast]
+  enabled = false
+  # Filter by device name (empty = first found, "*" = all discovered)
+  device_name = ""
+  # How often to scan for new Cast devices on the network (seconds)
+  discovery_interval = 60
+  ```
+- [ ] Add `CastConfig` to `internal/config/config.go`
+- [ ] mDNS / SSDP discovery: find Cast devices on the LAN
+  - Use `github.com/vishen/go-chromecast` or `github.com/barnybug/go-cast`
+  - Evaluate both libraries; prefer the one with fewer dependencies and
+    active maintenance
+- [ ] `internal/cast/discovery.go` — background goroutine that periodically
+  scans the network, maintains a list of discovered devices
+- [ ] `GET /api/v1/cast/devices` — list discovered Cast devices
+  (name, model, IP, port, status)
+- [ ] Admin UI: Cast devices section — show discovered devices, allow
+  selecting which device to cast to
+
+### 13B — Direct media casting (Default Media Receiver)
+
+Cast images and videos directly to Chromecast using the built-in Default
+Media Receiver (app ID `CC1AD845`). No Google registration needed.
+This covers the most common digital signage use case: image/video playlists.
+
+- [ ] `internal/cast/sender.go` — Cast sender that manages a connection to
+  one or more Cast devices
+- [ ] Cast `image` content: load image URL via Default Media Receiver
+  - The Cast device fetches `http://<afficho-ip>:8080/media/{file}` directly
+  - Requires the Afficho daemon to be reachable from the Cast device (same LAN)
+- [ ] Cast `video` content: load video URL via Default Media Receiver
+  - Same network requirement
+  - Handle `video.ended` equivalent: the Cast SDK reports media status,
+    advance scheduler when playback finishes
+- [ ] Duration management: for images, send a load command with idle timeout
+  matching the scheduler's `duration_s`; for videos, advance on media completion
+  or `duration_s`, whichever comes first
+- [ ] Integrate with scheduler: `cast.Sender` subscribes to `scheduler.OnChange`
+  (or a new callback) and pushes the new item to the Cast device on each advance
+- [ ] Handle Cast device disconnect/reconnect gracefully:
+  - Reconnect automatically when device reappears on the network
+  - Resume current content from scheduler state
+- [ ] `POST /api/v1/cast/start` — begin casting to a discovered device
+- [ ] `POST /api/v1/cast/stop` — stop casting
+- [ ] `GET /api/v1/cast/status` — current cast state (device, playing item, connected)
+
+### 13C — URL and HTML content on Cast (Custom Web Receiver)
+
+The Default Media Receiver can't render web pages or HTML. To get full
+feature parity (URL iframes, HTML content, RevealJS slides, transitions,
+alerts), the Afficho project registers a **Custom Web Receiver** with Google.
+
+- [ ] Build a Custom Web Receiver: minimal HTML page that:
+  - Accepts `ws_url` parameter (the daemon's WebSocket endpoint)
+  - Connects to the daemon's `/ws/display` WebSocket
+  - Renders content identically to the local `/display` page
+  - Hosted at `https://cast.afficho.io/receiver.html` (project-maintained)
+- [ ] Register the Custom Web Receiver with Google Cast SDK (one-time,
+  done by project maintainers — returns an app ID)
+- [ ] Update `cast.Sender` to use the Custom Receiver app ID for `url`,
+  `html`, and `slides` content types
+- [ ] The Cast device loads the receiver page, which connects back to the
+  daemon's WebSocket — all existing display features work automatically
+- [ ] Fallback: if Custom Receiver is unavailable (offline, Google changes
+  policy), log a warning and skip non-media content types
+
+### 13D — Multi-device casting
+
+- [ ] Support casting to multiple Cast devices simultaneously
+- [ ] Config: allow a list of device names or "all"
+  ```toml
+  [cast]
+  device_name = ["Kitchen TV", "Lobby Display"]
+  ```
+- [ ] Each Cast device can show the same content (mirror mode) or be assigned
+  to a different playlist (independent mode — future, requires per-device
+  playlist assignment)
+- [ ] Admin UI: multi-device status overview, start/stop per device
+
+---
+
+## Phase 14 — RevealJS Presentation Slides
+
+New content type `"slides"` powered by RevealJS. Users create slide decks
+in the admin UI (or upload RevealJS HTML). The display renders them as
+full-screen auto-advancing presentations.
+
+### Backend
+
+- [ ] Embed RevealJS 5.x library in `web/static/revealjs/`
+  - `reveal.min.js`, `reveal.min.css`, bundled themes
+  - Adds ~200 KB to the binary (gzipped)
+- [ ] New content type `type: "slides"` in `content_items`
+  - Update the `CHECK` constraint in migration:
+    `CHECK(type IN ('image','video','url','html','slides'))`
+- [ ] Slide data stored as JSON in the `source` column:
+  ```json
+  {
+    "slides": [
+      { "content": "<h1>Welcome</h1><p>To our store</p>" },
+      { "content": "<h2>Today's Special</h2><ul><li>50% off</li></ul>" },
+      { "content": "## Markdown Slide\n\nRevealJS supports **markdown**" }
+    ],
+    "theme": "black",
+    "transition": "slide",
+    "auto_slide_ms": 0
+  }
+  ```
+  - `auto_slide_ms: 0` means "derive from content item duration_s / slide count"
+  - Non-zero value overrides: each slide displays for exactly that many ms
+- [ ] `POST /api/v1/content` with `type: "slides"`:
+  ```json
+  {
+    "name": "Welcome Slides",
+    "type": "slides",
+    "slides": [...],
+    "theme": "black",
+    "transition": "slide"
+  }
+  ```
+  - Validate: at least 1 slide, each slide has non-empty content
+  - Store serialized JSON in `source`
+  - `duration_s` defaults to `10 * slide_count` if not provided
+- [ ] `PATCH /api/v1/content/{id}` — update slides, theme, transition
+  - Accept `slides` field for partial update (replace all slides)
+- [ ] Extend `/content/{id}/render` to handle `type: "slides"`:
+  - Parse JSON from `source`
+  - Generate full RevealJS HTML page:
+    - Include embedded `reveal.min.js` and theme CSS
+    - Render each slide as a `<section>`
+    - Configure `autoSlide` based on item duration or `auto_slide_ms`
+    - Enable `loop: false` (play through once, then signal completion)
+  - Set appropriate CSP headers for RevealJS execution
+- [ ] Signal presentation completion to the scheduler:
+  - Option A: RevealJS `slidechanged` event — when the last slide has been
+    shown for its duration, call `POST /display/advance` (same pattern as
+    video `ended` event)
+  - Option B: rely on the scheduler's `duration_s` timer (simpler, works
+    even if JS fails, but less precise)
+  - **Use both:** RevealJS signals completion via `/display/advance`, and
+    the scheduler timer acts as a fallback
+- [ ] RevealJS themes available: `black`, `white`, `league`, `beige`, `sky`,
+  `night`, `serif`, `simple`, `solarized`, `moon`, `dracula`
+  - Map to RevealJS built-in theme CSS files
+- [ ] RevealJS transitions: `none`, `fade`, `slide`, `convex`, `concave`, `zoom`
+
+### Display page integration
+
+- [ ] Update `createContentElement()` in `display.html` to handle `type: "slides"`:
+  - Create an `<iframe>` pointing to `/content/{id}/render`
+  - Same sandbox as `html` type: `allow-scripts`
+  - Pass duration info so RevealJS can calculate per-slide timing
+- [ ] The iframe loads the RevealJS presentation, which auto-advances and
+  signals completion — no changes needed to the double-buffer or swap logic
+
+### Admin UI — Slide editor
+
+- [ ] "Add Slides" button in the content library (alongside URL, Upload, HTML)
+- [ ] Slide editor page:
+  - Left panel: slide list (thumbnails/numbers), drag-to-reorder, add/delete
+  - Right panel: slide content editor
+    - Toggle between HTML and Markdown editing modes
+    - Live preview of the current slide (rendered in a small iframe)
+  - Theme selector dropdown
+  - Transition selector dropdown
+  - Auto-advance timing: "Auto (from duration)" or custom ms per slide
+- [ ] Slide content supports:
+  - HTML (direct `<h1>`, `<p>`, `<img>`, etc.)
+  - Markdown (RevealJS has built-in Markdown support via the `marked` plugin)
+  - Inline images (base64 data URLs or `/media/` references)
+
+### RevealJS HTML upload
+
+- [ ] Alternative creation path: upload a complete RevealJS HTML file
+  - `POST /api/v1/content` with `type: "slides"` and multipart upload
+  - Validate: must contain RevealJS initialization (`Reveal.initialize`)
+  - Store the raw HTML in `source` as `{ "raw_html": "..." }`
+  - Render endpoint serves it directly (with Afficho's RevealJS assets)
+- [ ] Use case: designers build slides in RevealJS externally, upload the
+  finished file to Afficho for display
+
+---
+
+## Phase 15 — Document Slides (Google Slides, PPTX, ODP)
+
+Display slide decks from Google Slides, Microsoft PowerPoint, and
+LibreOffice Impress.
+
+### 15A — Google Slides (embed URL)
+
+Google Slides already works as a `type: "url"` content item by pasting the
+published embed URL. This phase adds smart detection and quality-of-life
+improvements.
+
+- [ ] URL detection: when creating content with `type: "url"`, detect Google
+  Slides URLs and offer to enhance them:
+  - Detect pattern: `docs.google.com/presentation/d/{id}/...`
+  - Auto-rewrite to embed URL:
+    `https://docs.google.com/presentation/d/{id}/embed?start=true&loop=true&delayms={ms}`
+  - Calculate `delayms` from `duration_s / estimated_slide_count` or use
+    a sensible default (5000 ms)
+- [ ] `POST /api/v1/content` — new optional field `google_slides_id`:
+  - If provided, auto-generate the embed URL
+  - Store original presentation ID in metadata for future reference
+- [ ] Admin UI: "Add Google Slides" shortcut in content library
+  - Input: paste any Google Slides URL (view, edit, or embed)
+  - Auto-extract the presentation ID
+  - Configure: slide advance delay (seconds), start from beginning, loop
+  - Preview before adding
+- [ ] Document in the admin UI: the Google Slides presentation must be
+  published to the web (`File → Share → Publish to web`) or at least set
+  to "Anyone with the link can view"
+- [ ] Handle Google Slides URL variants:
+  - `/edit` URLs → convert to `/embed`
+  - `/pub` URLs → convert to `/embed`
+  - Already `/embed` → use as-is, ensure query params are set
+- [ ] Limitations to document:
+  - Requires internet access from the display device
+  - Google controls rendering — no offline support
+  - Some animations/transitions may not work in embed mode
+
+### 15B — PowerPoint & LibreOffice Impress (file conversion)
+
+Upload `.pptx`, `.ppt`, `.odp`, or `.key` files. Convert to images using
+LibreOffice headless mode. Store each slide as an image and create a
+slides content item that cycles through them.
+
+**Dependency:** LibreOffice must be installed on the device. This is an
+optional feature — if LibreOffice is not available, the upload is rejected
+with a helpful error message explaining how to install it.
+
+#### Conversion pipeline
+
+- [ ] `internal/slides/converter.go` — slide file → image conversion:
+  - Accept file path, output directory
+  - Run: `libreoffice --headless --convert-to png --outdir {dir} {file}`
+  - Parse output to determine how many slides were generated
+  - Return list of generated image paths
+  - Timeout: 60s per conversion (configurable), kill process on timeout
+- [ ] Detect LibreOffice availability on startup:
+  - Try `libreoffice --version` (or `soffice --version`)
+  - Store result in a capability flag
+  - `GET /api/v1/system` — include `"slides_conversion": true/false`
+- [ ] Accepted MIME types / extensions:
+  - `.pptx` — `application/vnd.openxmlformats-officedocument.presentationml.presentation`
+  - `.ppt` — `application/vnd.ms-powerpoint`
+  - `.odp` — `application/vnd.oasis.opendocument.presentation`
+  - `.key` — `application/x-iwork-keynote-sffkey` (best-effort, LibreOffice
+    support for Keynote is limited)
+- [ ] Validate magic bytes for each format (same pattern as image/video validation)
+
+#### Content creation flow
+
+- [ ] `POST /api/v1/content` with `type: "slides"` and multipart upload of
+  a slide file:
+  1. Save uploaded file to temp directory
+  2. Run LibreOffice conversion → generates `slide1.png`, `slide2.png`, ...
+  3. Move generated images to `data/media/{content_id}/slide-{n}.png`
+  4. Create content item with `type: "slides"` and `source` containing:
+     ```json
+     {
+       "format": "converted",
+       "slide_count": 12,
+       "slide_paths": ["/media/{id}/slide-1.png", "/media/{id}/slide-2.png", ...],
+       "original_filename": "quarterly-review.pptx"
+     }
+     ```
+  5. `duration_s` defaults to `10 * slide_count` if not provided
+  6. Delete temp file after conversion
+- [ ] Handle conversion errors gracefully:
+  - LibreOffice not installed → 400 with message:
+    `"slide conversion requires LibreOffice (apt install libreoffice-impress)"`
+  - Conversion fails → 400 with LibreOffice error output
+  - Corrupt/invalid file → 400 with descriptive message
+- [ ] Track total size of generated images in `size_bytes`
+
+#### Display rendering
+
+- [ ] Extend `/content/{id}/render` for converted slide decks:
+  - Generate an HTML page that cycles through the slide images
+  - Use CSS transitions (fade or slide) between images
+  - Auto-advance timing: `duration_s / slide_count` per slide
+  - Signal completion via `POST /display/advance` after the last slide
+- [ ] Alternative: generate a RevealJS presentation with `<img>` slides
+  (reuse Phase 14 infrastructure) — this gives RevealJS transitions and
+  themes for free
+- [ ] Update `createContentElement()` in `display.html`:
+  - Converted slide decks render as an iframe to `/content/{id}/render`
+  - Same behavior as RevealJS slides
+
+#### Admin UI
+
+- [ ] "Upload Slides" button in content library:
+  - Drag-and-drop or file picker for `.pptx`, `.ppt`, `.odp`
+  - Show conversion progress (spinner — conversion can take 5-30s)
+  - Preview generated slides after conversion
+  - Allow re-ordering or removing individual slides before saving
+- [ ] Slide deck detail view:
+  - Thumbnail grid of all slides
+  - Per-slide duration override (default: auto from total duration)
+  - Option to re-upload / re-convert (preserves content ID, replaces slides)
+- [ ] Show a warning if LibreOffice is not detected:
+  "Slide file upload requires LibreOffice. Install with:
+  `sudo apt install libreoffice-impress`"
+
+#### Re-conversion on update
+
+- [ ] `PATCH /api/v1/content/{id}` with new file upload:
+  - Re-run conversion pipeline
+  - Replace old slide images
+  - Update slide count and size
+  - Trigger scheduler reload + WebSocket broadcast
+- [ ] Delete old slide images when content item is deleted
+
+### 15C — PDF slides
+
+PDFs are a common output format for presentations. Support them as a
+lightweight alternative to PPTX conversion.
+
+- [ ] Accept `.pdf` uploads for `type: "slides"`
+- [ ] Convert PDF pages to images:
+  - Option A: `pdftoppm` (from `poppler-utils`, lighter than LibreOffice)
+  - Option B: LibreOffice headless (`--convert-to png`)
+  - Prefer `pdftoppm` — smaller dependency, faster, better quality
+- [ ] Same storage and rendering pipeline as converted PPTX slides
+- [ ] Detect `pdftoppm` availability:
+  `GET /api/v1/system` — include `"pdf_conversion": true/false`
+- [ ] Admin UI: accept `.pdf` in the same upload dialog as PPTX/ODP
+
+---
+
 ## Backlog / Nice to Have
 
 - [ ] **Cache eviction** when `storage.max_cache_gb` is exceeded (LRU — delete items
@@ -346,6 +688,8 @@ fallback, but it should not be a required decision at creation time.
 ## Backlog / Cloud Sync (Afficho Cloud / EE)
 
 No cloud backend exists yet. These items are parked until the cloud platform is built.
+See `afficho-cloud` repo (`TODOS.md`) for the full cloud implementation plan.
+See `afficho-types` repo (`TODOS.md`) for the shared wire-format types.
 
 - [ ] Generate stable device ID on first run (UUIDv4, stored in `device_meta`)
 - [ ] Device registration: POST device info (ID, hostname, IP, arch, version) to cloud
