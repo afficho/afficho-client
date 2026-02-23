@@ -24,13 +24,17 @@ func TestPlayLogRecordTransition(t *testing.T) {
 
 	// Verify a record was inserted for "a".
 	var count int
-	database.QueryRow(`SELECT COUNT(*) FROM proof_of_play WHERE content_id = 'a'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM proof_of_play WHERE content_id = 'a'`).Scan(&count); err != nil {
+		t.Fatalf("query count: %v", err)
+	}
 	if count != 1 {
 		t.Errorf("expected 1 record for item 'a', got %d", count)
 	}
 
 	var durationS int
-	database.QueryRow(`SELECT duration_s FROM proof_of_play WHERE content_id = 'a'`).Scan(&durationS)
+	if err := database.QueryRow(`SELECT duration_s FROM proof_of_play WHERE content_id = 'a'`).Scan(&durationS); err != nil {
+		t.Fatalf("query duration: %v", err)
+	}
 	if durationS < 14 || durationS > 16 {
 		t.Errorf("expected duration ~15s, got %d", durationS)
 	}
@@ -45,7 +49,9 @@ func TestPlayLogSkipsZeroDuration(t *testing.T) {
 	pl.RecordTransition("b")
 
 	var count int
-	database.QueryRow(`SELECT COUNT(*) FROM proof_of_play WHERE content_id = 'a'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM proof_of_play WHERE content_id = 'a'`).Scan(&count); err != nil {
+		t.Fatalf("query count: %v", err)
+	}
 	if count != 0 {
 		t.Errorf("expected no record for zero-duration play, got %d", count)
 	}
@@ -65,7 +71,9 @@ func TestPlayLogTransitionToEmpty(t *testing.T) {
 	pl.RecordTransition("")
 
 	var count int
-	database.QueryRow(`SELECT COUNT(*) FROM proof_of_play WHERE content_id = 'a'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM proof_of_play WHERE content_id = 'a'`).Scan(&count); err != nil {
+		t.Fatalf("query count: %v", err)
+	}
 	if count != 1 {
 		t.Errorf("expected 1 record for item 'a', got %d", count)
 	}

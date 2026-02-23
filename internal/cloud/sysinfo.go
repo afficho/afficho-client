@@ -43,8 +43,8 @@ func diskUsedPct(path string) float64 {
 	if err := unix.Statfs(path, &stat); err != nil {
 		return 0
 	}
-	total := stat.Blocks * uint64(stat.Bsize) //nolint:unconvert // Bsize is int32 on 32-bit
-	free := stat.Bfree * uint64(stat.Bsize)   //nolint:unconvert
+	total := stat.Blocks * uint64(stat.Bsize) //nolint:unconvert // Bsize is int32 on 32-bit ARM
+	free := stat.Bfree * uint64(stat.Bsize)   //nolint:unconvert // same as above
 	if total == 0 {
 		return 0
 	}

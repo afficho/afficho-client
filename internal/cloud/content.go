@@ -151,7 +151,7 @@ func (cs *ContentSyncer) downloadAndVerify(ctx context.Context, item types.Conte
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, item.Source, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, item.Source, http.NoBody)
 	if err != nil {
 		return "", 0, "", fmt.Errorf("creating request: %w", err)
 	}

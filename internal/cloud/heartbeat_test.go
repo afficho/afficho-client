@@ -54,7 +54,7 @@ func TestHeartbeatSentPeriodically(t *testing.T) {
 				// Send ack back.
 				ack, _ := json.Marshal(types.WSMessage{Type: types.TypeHeartbeatAck})
 				ctx, cancel := context.WithTimeout(r.Context(), time.Second)
-				conn.Write(ctx, websocket.MessageText, ack)
+				_ = conn.Write(ctx, websocket.MessageText, ack)
 				cancel()
 			}
 		}

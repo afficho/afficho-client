@@ -134,7 +134,7 @@ func TestConnectorDispatchesMessages(t *testing.T) {
 		defer conn.Close(websocket.StatusNormalClosure, "")
 
 		// Read the registration message (discard).
-		conn.Read(r.Context())
+		_, _, _ = conn.Read(r.Context())
 
 		// Send a command message to the client.
 		cmd := types.DeviceCommand{Command: "reload"}
@@ -144,7 +144,7 @@ func TestConnectorDispatchesMessages(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second)
 		defer cancel()
-		conn.Write(ctx, websocket.MessageText, data)
+		_ = conn.Write(ctx, websocket.MessageText, data)
 
 		// Keep alive for the client to process.
 		time.Sleep(200 * time.Millisecond)
@@ -198,7 +198,7 @@ func TestConnectorReconnects(t *testing.T) {
 		}
 		connectCount.Add(1)
 		// Read registration then immediately close to force reconnect.
-		conn.Read(r.Context())
+		_, _, _ = conn.Read(r.Context())
 		conn.Close(websocket.StatusNormalClosure, "test close")
 	}))
 	defer srv.Close()
@@ -255,7 +255,7 @@ func TestConnectorConnectedState(t *testing.T) {
 		}
 		defer conn.Close(websocket.StatusNormalClosure, "")
 		// Read registration, then keep alive.
-		conn.Read(r.Context())
+		_, _, _ = conn.Read(r.Context())
 		time.Sleep(500 * time.Millisecond)
 	}))
 	defer srv.Close()
@@ -298,7 +298,7 @@ func TestConnectorOnConnectCallbacks(t *testing.T) {
 			return
 		}
 		defer conn.Close(websocket.StatusNormalClosure, "")
-		conn.Read(r.Context())
+		_, _, _ = conn.Read(r.Context())
 		time.Sleep(200 * time.Millisecond)
 	}))
 	defer srv.Close()
@@ -342,7 +342,7 @@ func TestConnectorDisconnectedAfterClose(t *testing.T) {
 			return
 		}
 		// Read registration, then wait for signal to close.
-		conn.Read(r.Context())
+		_, _, _ = conn.Read(r.Context())
 		<-closeConn
 		conn.Close(websocket.StatusNormalClosure, "")
 	}))

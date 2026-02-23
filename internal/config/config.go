@@ -69,11 +69,11 @@ type SecurityConfig struct {
 // When Enabled is true, the daemon connects to the cloud WebSocket endpoint
 // and receives remote playlists, content, commands, and alerts.
 type CloudConfig struct {
-	Enabled            bool   `toml:"enabled"`
-	Endpoint           string `toml:"endpoint"`
-	DeviceKey          string `toml:"device_key"`
-	HeartbeatInterval  int    `toml:"heartbeat_interval"`  // seconds
-	ReconnectMaxDelay  int    `toml:"reconnect_max_delay"` // seconds
+	Enabled           bool   `toml:"enabled"`
+	Endpoint          string `toml:"endpoint"`
+	DeviceKey         string `toml:"device_key"`
+	HeartbeatInterval int    `toml:"heartbeat_interval"`  // seconds
+	ReconnectMaxDelay int    `toml:"reconnect_max_delay"` // seconds
 }
 
 // UpdateConfig controls automatic updates from GitHub releases.

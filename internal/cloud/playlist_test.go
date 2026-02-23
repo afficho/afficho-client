@@ -56,7 +56,9 @@ func TestPlaylistSyncUpsertsPlaylist(t *testing.T) {
 
 	// Verify playlist items.
 	var count int
-	database.QueryRow(`SELECT COUNT(*) FROM playlist_items WHERE playlist_id = 'pl-1'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM playlist_items WHERE playlist_id = 'pl-1'`).Scan(&count); err != nil {
+		t.Fatalf("query count: %v", err)
+	}
 	if count != 2 {
 		t.Errorf("expected 2 playlist items, got %d", count)
 	}
@@ -126,20 +128,26 @@ func TestPlaylistSyncReplacesItems(t *testing.T) {
 
 	// Verify name was updated.
 	var name string
-	database.QueryRow(`SELECT name FROM playlists WHERE id = 'pl-1'`).Scan(&name)
+	if err := database.QueryRow(`SELECT name FROM playlists WHERE id = 'pl-1'`).Scan(&name); err != nil {
+		t.Fatalf("query name: %v", err)
+	}
 	if name != "Playlist V2" {
 		t.Errorf("expected name 'Playlist V2', got %q", name)
 	}
 
 	// Verify only c-2 is in the playlist now.
 	var count int
-	database.QueryRow(`SELECT COUNT(*) FROM playlist_items WHERE playlist_id = 'pl-1'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM playlist_items WHERE playlist_id = 'pl-1'`).Scan(&count); err != nil {
+		t.Fatalf("query count: %v", err)
+	}
 	if count != 1 {
 		t.Errorf("expected 1 playlist item after replace, got %d", count)
 	}
 
 	var contentID string
-	database.QueryRow(`SELECT content_id FROM playlist_items WHERE playlist_id = 'pl-1'`).Scan(&contentID)
+	if err := database.QueryRow(`SELECT content_id FROM playlist_items WHERE playlist_id = 'pl-1'`).Scan(&contentID); err != nil {
+		t.Fatalf("query content_id: %v", err)
+	}
 	if contentID != "c-2" {
 		t.Errorf("expected content_id 'c-2', got %q", contentID)
 	}
@@ -171,13 +179,17 @@ func TestPlaylistSyncDeletesStale(t *testing.T) {
 
 	// stale-pl should be gone.
 	var count int
-	database.QueryRow(`SELECT COUNT(*) FROM playlists WHERE id = 'stale-pl'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM playlists WHERE id = 'stale-pl'`).Scan(&count); err != nil {
+		t.Fatalf("query stale: %v", err)
+	}
 	if count != 0 {
 		t.Error("expected stale cloud playlist to be deleted")
 	}
 
 	// local-pl should still exist.
-	database.QueryRow(`SELECT COUNT(*) FROM playlists WHERE id = 'local-pl'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM playlists WHERE id = 'local-pl'`).Scan(&count); err != nil {
+		t.Fatalf("query local: %v", err)
+	}
 	if count != 1 {
 		t.Error("expected local playlist to be preserved")
 	}
@@ -198,7 +210,9 @@ func TestPlaylistSyncPreservesLocalPlaylists(t *testing.T) {
 
 	// The default playlist (seeded by migration 3) is local. Verify it's not touched.
 	var defaultCount int
-	database.QueryRow(`SELECT COUNT(*) FROM playlists WHERE is_default = 1`).Scan(&defaultCount)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM playlists WHERE is_default = 1`).Scan(&defaultCount); err != nil {
+		t.Fatalf("query default count: %v", err)
+	}
 	if defaultCount != 1 {
 		t.Fatalf("expected 1 default playlist, got %d", defaultCount)
 	}
@@ -216,14 +230,18 @@ func TestPlaylistSyncPreservesLocalPlaylists(t *testing.T) {
 	}
 
 	// Default playlist should still exist.
-	database.QueryRow(`SELECT COUNT(*) FROM playlists WHERE is_default = 1`).Scan(&defaultCount)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM playlists WHERE is_default = 1`).Scan(&defaultCount); err != nil {
+		t.Fatalf("query default count: %v", err)
+	}
 	if defaultCount != 1 {
 		t.Error("expected default playlist to be preserved after cloud sync")
 	}
 
 	// Cloud playlist should exist.
 	var cloudCount int
-	database.QueryRow(`SELECT COUNT(*) FROM playlists WHERE id = 'cloud-pl'`).Scan(&cloudCount)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM playlists WHERE id = 'cloud-pl'`).Scan(&cloudCount); err != nil {
+		t.Fatalf("query cloud count: %v", err)
+	}
 	if cloudCount != 1 {
 		t.Error("expected cloud playlist to exist")
 	}

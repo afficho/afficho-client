@@ -260,9 +260,9 @@ type mockCloudStatus struct {
 	deviceID        string
 }
 
-func (m *mockCloudStatus) Connected() bool          { return m.connected }
+func (m *mockCloudStatus) Connected() bool            { return m.connected }
 func (m *mockCloudStatus) LastConnectedAt() time.Time { return m.lastConnectedAt }
-func (m *mockCloudStatus) DeviceID() string          { return m.deviceID }
+func (m *mockCloudStatus) DeviceID() string           { return m.deviceID }
 
 // mockPendingCounter implements PendingCounter for testing.
 type mockPendingCounter struct {
@@ -342,7 +342,9 @@ func TestCloudStatusNoPendingCounter(t *testing.T) {
 	}
 
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
 
 	if _, ok := resp["pending_proof_of_play"]; ok {
 		t.Error("expected no pending_proof_of_play when counter is nil")

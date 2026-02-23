@@ -90,7 +90,7 @@ func TestContentSyncMediaDownload(t *testing.T) {
 	checksumHex := hex.EncodeToString(checksum[:])
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(imgData)
+		_, _ = w.Write(imgData)
 	}))
 	defer srv.Close()
 
@@ -200,13 +200,17 @@ func TestContentSyncDeletesStale(t *testing.T) {
 
 	// stale-1 should be gone.
 	var count int
-	database.QueryRow(`SELECT COUNT(*) FROM content_items WHERE id = 'stale-1'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM content_items WHERE id = 'stale-1'`).Scan(&count); err != nil {
+		t.Fatalf("query stale: %v", err)
+	}
 	if count != 0 {
 		t.Error("expected stale cloud item to be deleted")
 	}
 
 	// local-1 should still exist.
-	database.QueryRow(`SELECT COUNT(*) FROM content_items WHERE id = 'local-1'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM content_items WHERE id = 'local-1'`).Scan(&count); err != nil {
+		t.Fatalf("query local: %v", err)
+	}
 	if count != 1 {
 		t.Error("expected local item to be preserved")
 	}
@@ -217,7 +221,7 @@ func TestContentSyncChecksumMismatchRejectsFile(t *testing.T) {
 	cs := NewContentSyncer(conn, database, mgr)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("actual-data"))
+		_, _ = w.Write([]byte("actual-data"))
 	}))
 	defer srv.Close()
 
@@ -233,11 +237,13 @@ func TestContentSyncChecksumMismatchRejectsFile(t *testing.T) {
 	}
 
 	// Sync should not fail entirely (logs error, continues).
-	cs.sync(context.Background(), items)
+	_ = cs.sync(context.Background(), items)
 
 	// Item should NOT be in the DB since checksum didn't match.
 	var count int
-	database.QueryRow(`SELECT COUNT(*) FROM content_items WHERE id = 'bad-checksum'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM content_items WHERE id = 'bad-checksum'`).Scan(&count); err != nil {
+		t.Fatalf("query: %v", err)
+	}
 	if count != 0 {
 		t.Error("expected item with bad checksum to not be inserted")
 	}

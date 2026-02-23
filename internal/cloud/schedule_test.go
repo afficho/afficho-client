@@ -88,7 +88,9 @@ func TestScheduleSyncUpdatesExisting(t *testing.T) {
 
 	var playlistID, cronExpr string
 	var priority int
-	database.QueryRow(`SELECT playlist_id, cron_expr, priority FROM schedules WHERE id = 'sched-1'`).Scan(&playlistID, &cronExpr, &priority)
+	if err := database.QueryRow(`SELECT playlist_id, cron_expr, priority FROM schedules WHERE id = 'sched-1'`).Scan(&playlistID, &cronExpr, &priority); err != nil {
+		t.Fatalf("query schedule: %v", err)
+	}
 	if playlistID != "pl-2" {
 		t.Errorf("expected playlist_id 'pl-2', got %q", playlistID)
 	}
@@ -132,13 +134,17 @@ func TestScheduleSyncDeletesStale(t *testing.T) {
 
 	// stale-sched should be gone.
 	var count int
-	database.QueryRow(`SELECT COUNT(*) FROM schedules WHERE id = 'stale-sched'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM schedules WHERE id = 'stale-sched'`).Scan(&count); err != nil {
+		t.Fatalf("query stale: %v", err)
+	}
 	if count != 0 {
 		t.Error("expected stale cloud schedule to be deleted")
 	}
 
 	// local-sched should still exist.
-	database.QueryRow(`SELECT COUNT(*) FROM schedules WHERE id = 'local-sched'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM schedules WHERE id = 'local-sched'`).Scan(&count); err != nil {
+		t.Fatalf("query local: %v", err)
+	}
 	if count != 1 {
 		t.Error("expected local schedule to be preserved")
 	}
@@ -159,11 +165,13 @@ func TestScheduleSyncRejectsInvalidCronExpr(t *testing.T) {
 	}
 
 	// Sync should not fail entirely (logs error, continues).
-	ss.sync(context.Background(), schedules)
+	_ = ss.sync(context.Background(), schedules)
 
 	// Schedule should NOT be in the DB since the cron expression was invalid.
 	var count int
-	database.QueryRow(`SELECT COUNT(*) FROM schedules WHERE id = 'bad-sched'`).Scan(&count)
+	if err := database.QueryRow(`SELECT COUNT(*) FROM schedules WHERE id = 'bad-sched'`).Scan(&count); err != nil {
+		t.Fatalf("query: %v", err)
+	}
 	if count != 0 {
 		t.Error("expected schedule with invalid cron_expr to not be inserted")
 	}
