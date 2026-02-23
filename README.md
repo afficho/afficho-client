@@ -209,7 +209,7 @@ The daemon exposes a REST API at `/api/v1`. All responses are JSON.
 | `GET` | `/api/v1/scheduler/status` | Queue + current item |
 | `POST` | `/api/v1/scheduler/next` | Force advance to next item |
 
-> See [TODOS.md](./TODOS.md) for planned features and progress.
+> See [GitHub Issues](https://github.com/afficho/afficho-client/issues) for planned features.
 
 ## Content Types
 
@@ -280,7 +280,9 @@ sudo cp config.example.toml /etc/afficho/config.toml
 4. Install the systemd service:
 
 ```bash
-# Coming soon — see TODOS.md
+sudo cp deploy/afficho.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now afficho
 ```
 
 ## License

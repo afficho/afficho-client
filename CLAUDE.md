@@ -6,7 +6,7 @@ Go daemon for the **Afficho** open-source digital signage platform.
 Runs on Raspberry Pi / Linux. Manages content, drives a Chromium kiosk via HTTP,
 and exposes a local admin UI + REST API.
 
-See `TODOS.md` for all planned work organized by phase.
+Open work is tracked as [GitHub Issues](https://github.com/afficho/afficho-client/issues).
 
 ## Environment
 
@@ -23,16 +23,18 @@ internal/db/                 SQLite open + schema (WAL mode, FK on)
 internal/content/            Local media storage and download
 internal/scheduler/          Playlist queue — Current() / Advance() / TriggerReload()
 internal/display/            Chromium kiosk launcher (restarts on crash)
+internal/cloud/              Cloud connector, sync handlers, proof-of-play
+internal/updater/            Self-update via GitHub releases
 internal/api/
   server.go                  chi router, graceful shutdown
   display.go                 GET /display (HTML page) + GET /display/current (JSON)
-  handlers.go                All other endpoints (many are stubs — see TODOs)
+  handlers.go                REST API handlers + helpers
 ```
 
 ## Key architectural decisions
 
-- **Chromium is a dumb renderer.** It polls `/display/current` today; WebSocket
-  (`/ws/display`) is the planned replacement (Phase 3 in TODOS.md).
+- **Chromium is a dumb renderer.** It connects via WebSocket (`/ws/display`)
+  and receives content updates pushed from the server.
 - **WebSocket message envelope:** `{ "type": "current|reload|alert|ticket", "payload": {} }`
   — same format will be used by cloud sync so the display page doesn't care whether
   control is local or cloud-originated.
@@ -40,8 +42,7 @@ internal/api/
 - **CE vs EE split:** single config password is CE. SSO/RBAC lives in the Afficho Cloud
   web console (EE), not in this repo.
 - **`/display` and `/ws/display` are intentionally unauthenticated** — Chromium on the
-  same device calls them without credentials. Auth (Phase 2) wraps `/admin` and
-  `/api/v1` only.
+  same device calls them without credentials. Auth wraps `/admin` and `/api/v1` only.
 
 ## Common commands (run inside the container)
 
@@ -57,10 +58,10 @@ go mod tidy       # after adding/removing imports
 
 - Structured logging via `log/slog` — use `slog.Info/Error/Debug`, not `fmt.Println`.
 - Return errors wrapped with `fmt.Errorf("context: %w", err)`; don't log and return.
-- After any content or playlist write: call `scheduler.TriggerReload()` and (later)
+- After any content or playlist write: call `scheduler.TriggerReload()` and
   broadcast a WebSocket `current` message.
 - All JSON responses go through the `respond(w, code, body)` helper in `handlers.go`.
 - Keep handler files thin — business logic belongs in `internal/` packages.
-- Corporate design: the canonical style guide lives in `../afficho-brand/Styleguide.md`.
-  The local `Styleguide.md` is a pointer. Brand assets (icon.svg, logo.svg) in
-  `web/static/` are copies — update from `../afficho-brand/assets/` when they change.
+- Corporate design: the style guide lives in `../afficho-brand/Styleguide.md`.
+  Brand assets (icon.svg, logo.svg) in `web/static/` are copies — update from
+  `../afficho-brand/assets/` when they change.
