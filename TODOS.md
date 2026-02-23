@@ -678,7 +678,7 @@ lightweight alternative to PPTX conversion.
 - [ ] **RSS / Atom feed** content source — auto-refresh headlines
 - [ ] **Clock / date overlay** — configurable position + style
 - [ ] **QR code overlay** — configurable URL
-- [ ] **Proof-of-play log** — record item ID, start time, duration played
+- [x] **Proof-of-play log** — record item ID, start time, duration played (CS-10/CS-12)
 - [ ] **Prometheus metrics** endpoint (`/metrics`)
 - [ ] **Content editor** — basic text-on-colour slide compositor in the admin UI
 - [ ] **Android companion app** — WebView wrapper pointing at `http://device-ip:8080`
@@ -804,27 +804,30 @@ Shared wire-format types are in `afficho-types` repo.
 
 ### CS-11 — Offline resilience
 
-- [ ] Operate fully from local DB when cloud is unreachable
-- [ ] On reconnect: cloud re-evaluates and pushes resolved state
+- [x] Operate fully from local DB when cloud is unreachable
+- [x] On reconnect: cloud re-evaluates and pushes resolved state
   (playlists, schedules, content manifest)
-- [ ] Flush pending proof-of-play records on reconnect
-- [ ] `GET /api/v1/cloud/status` — device ID, cloud connection state,
+- [x] Flush pending proof-of-play records on reconnect
+  (`OnConnect` callback fires `PlayLogger.Flush()` after each successful connection)
+- [x] `GET /api/v1/cloud/status` — device ID, cloud connection state,
   last sync timestamp, pending proof-of-play count
+- [x] Connection state tracking: `Connected()`, `LastConnectedAt()`, `DeviceID()` on Connector
+- [x] `OnConnect` callback mechanism for post-reconnect actions
 
 ### CS-12 — DB schema changes
 
-- [ ] Add `source` column (`TEXT DEFAULT 'local'`) to `playlists` table
-  (values: `'local'`, `'cloud'`)
-- [ ] Add `source` column (`TEXT DEFAULT 'local'`) to `content_items` table
-- [ ] Add `source` column (`TEXT DEFAULT 'local'`) to `schedules` table
-- [ ] Create `proof_of_play` table:
+- [x] Add `origin` column (`TEXT DEFAULT 'local'`) to `playlists` table
+  (values: `'local'`, `'cloud'`) — migration 5
+- [x] Add `checksum` and `origin` columns to `content_items` table — migration 4
+- [x] Add `origin` column (`TEXT DEFAULT 'local'`) to `schedules` table — migration 6
+- [x] Create `proof_of_play` table — migration 7:
   ```sql
   CREATE TABLE proof_of_play (
       id TEXT PRIMARY KEY,
       content_id TEXT NOT NULL,
       started_at TEXT NOT NULL,
       duration_s INTEGER NOT NULL,
-      synced BOOLEAN DEFAULT FALSE
+      synced BOOLEAN DEFAULT 0
   );
   ```
-- [ ] Migration to add new columns and table
+- [x] All migrations applied incrementally in `internal/db/migrations.go`

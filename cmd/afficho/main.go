@@ -131,6 +131,13 @@ func main() {
 			}
 			go playLog.Run(ctx)
 
+			// Flush pending proof-of-play records on every reconnect.
+			cloudConn.OnConnect(playLog.Flush)
+
+			// Expose cloud connector state for the status API.
+			server.SetCloudConnector(cloudConn)
+			server.SetPlayLogger(playLog)
+
 			go cloudConn.Run(ctx)
 		}
 	}

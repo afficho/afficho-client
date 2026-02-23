@@ -34,9 +34,12 @@ type Connector struct {
 	startedAt  time.Time
 	status     StatusProvider
 
-	mu       sync.Mutex
-	conn     *websocket.Conn
-	handlers map[string]MessageHandler
+	mu              sync.Mutex
+	conn            *websocket.Conn
+	handlers        map[string]MessageHandler
+	connected       bool
+	lastConnectedAt time.Time
+	onConnect       []func() // callbacks fired after each successful connect
 }
 
 // New creates a Connector. Call Run to start the connection loop.
@@ -62,6 +65,31 @@ func (c *Connector) SetStatusProvider(sp StatusProvider) {
 // Handle registers a handler for a given message type. Must be called before Run.
 func (c *Connector) Handle(msgType string, h MessageHandler) {
 	c.handlers[msgType] = h
+}
+
+// OnConnect registers a callback that fires after each successful connection.
+// Use this to flush pending data on reconnect. Must be called before Run.
+func (c *Connector) OnConnect(fn func()) {
+	c.onConnect = append(c.onConnect, fn)
+}
+
+// Connected reports whether the connector has an active WebSocket connection.
+func (c *Connector) Connected() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.connected
+}
+
+// LastConnectedAt returns the time of the most recent successful connection.
+func (c *Connector) LastConnectedAt() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lastConnectedAt
+}
+
+// DeviceID returns the device identifier used by this connector.
+func (c *Connector) DeviceID() string {
+	return c.deviceID
 }
 
 // handleHeartbeatAck processes a heartbeat_ack message. Currently logged
@@ -139,11 +167,14 @@ func (c *Connector) connect(ctx context.Context) error {
 
 	c.mu.Lock()
 	c.conn = conn
+	c.connected = true
+	c.lastConnectedAt = time.Now()
 	c.mu.Unlock()
 
 	defer func() {
 		c.mu.Lock()
 		c.conn = nil
+		c.connected = false
 		c.mu.Unlock()
 		conn.Close(websocket.StatusNormalClosure, "")
 	}()
@@ -154,6 +185,11 @@ func (c *Connector) connect(ctx context.Context) error {
 	}
 
 	slog.Info("cloud: connected and registered", "device_id", c.deviceID)
+
+	// Fire on-connect callbacks (e.g. flush pending proof-of-play).
+	for _, fn := range c.onConnect {
+		fn()
+	}
 
 	// Start heartbeat in background — cancelled when connCtx ends.
 	connCtx, connCancel := context.WithCancel(ctx)

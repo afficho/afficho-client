@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/afficho/afficho-client/internal/config"
 	"github.com/afficho/afficho-client/internal/content"
@@ -247,6 +248,104 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 	if got := w.Header().Get("Referrer-Policy"); got != "strict-origin-when-cross-origin" {
 		t.Errorf("expected Referrer-Policy, got %q", got)
+	}
+}
+
+// --- Cloud Status ---
+
+// mockCloudStatus implements CloudStatus for testing.
+type mockCloudStatus struct {
+	connected       bool
+	lastConnectedAt time.Time
+	deviceID        string
+}
+
+func (m *mockCloudStatus) Connected() bool          { return m.connected }
+func (m *mockCloudStatus) LastConnectedAt() time.Time { return m.lastConnectedAt }
+func (m *mockCloudStatus) DeviceID() string          { return m.deviceID }
+
+// mockPendingCounter implements PendingCounter for testing.
+type mockPendingCounter struct {
+	count int
+}
+
+func (m *mockPendingCounter) PendingCount() int { return m.count }
+
+func TestCloudStatusDisabled(t *testing.T) {
+	srv := testAPIServer(t)
+	srv.cfg.Cloud.Enabled = false
+
+	w := doRequest(srv, "GET", "/api/v1/cloud/status", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if resp["enabled"] != false {
+		t.Errorf("expected enabled=false, got %v", resp["enabled"])
+	}
+	if resp["connected"] != false {
+		t.Errorf("expected connected=false, got %v", resp["connected"])
+	}
+}
+
+func TestCloudStatusConnected(t *testing.T) {
+	srv := testAPIServer(t)
+	srv.cfg.Cloud.Enabled = true
+
+	now := time.Now().UTC().Truncate(time.Second)
+	srv.cloudStatus = &mockCloudStatus{
+		connected:       true,
+		lastConnectedAt: now,
+		deviceID:        "device-abc",
+	}
+	srv.pendingCounter = &mockPendingCounter{count: 5}
+
+	w := doRequest(srv, "GET", "/api/v1/cloud/status", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	if resp["enabled"] != true {
+		t.Errorf("expected enabled=true, got %v", resp["enabled"])
+	}
+	if resp["connected"] != true {
+		t.Errorf("expected connected=true, got %v", resp["connected"])
+	}
+	if resp["device_id"] != "device-abc" {
+		t.Errorf("expected device_id=device-abc, got %v", resp["device_id"])
+	}
+	if resp["last_connected_at"] == nil {
+		t.Error("expected last_connected_at to be set")
+	}
+	if pending, ok := resp["pending_proof_of_play"].(float64); !ok || int(pending) != 5 {
+		t.Errorf("expected pending_proof_of_play=5, got %v", resp["pending_proof_of_play"])
+	}
+}
+
+func TestCloudStatusNoPendingCounter(t *testing.T) {
+	srv := testAPIServer(t)
+	srv.cfg.Cloud.Enabled = true
+	srv.cloudStatus = &mockCloudStatus{connected: false, deviceID: "dev-1"}
+
+	w := doRequest(srv, "GET", "/api/v1/cloud/status", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	if _, ok := resp["pending_proof_of_play"]; ok {
+		t.Error("expected no pending_proof_of_play when counter is nil")
 	}
 }
 

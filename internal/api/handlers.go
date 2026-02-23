@@ -31,6 +31,31 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ── Cloud ────────────────────────────────────────────────────────────────────
+
+func (s *Server) handleCloudStatus(w http.ResponseWriter, r *http.Request) {
+	result := map[string]any{
+		"enabled": s.cfg.Cloud.Enabled,
+	}
+
+	if s.cloudStatus != nil {
+		result["connected"] = s.cloudStatus.Connected()
+		result["device_id"] = s.cloudStatus.DeviceID()
+		last := s.cloudStatus.LastConnectedAt()
+		if !last.IsZero() {
+			result["last_connected_at"] = last.Format("2006-01-02T15:04:05Z07:00")
+		}
+	} else {
+		result["connected"] = false
+	}
+
+	if s.pendingCounter != nil {
+		result["pending_proof_of_play"] = s.pendingCounter.PendingCount()
+	}
+
+	respond(w, http.StatusOK, result)
+}
+
 // ── Scheduler ─────────────────────────────────────────────────────────────────
 
 func (s *Server) handleSchedulerStatus(w http.ResponseWriter, r *http.Request) {

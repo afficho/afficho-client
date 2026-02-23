@@ -20,11 +20,20 @@ const (
 	defaultBatchSize = 50
 )
 
-// playRecord wraps the shared ProofOfPlayRecord with a local database ID
+// proofOfPlayRecord is the wire-format record sent to the cloud.
+// NOTE: this type should be promoted to afficho-types as ProofOfPlayRecord
+// once the cloud service is ready to receive it.
+type proofOfPlayRecord struct {
+	ContentID string `json:"content_id"`
+	StartedAt string `json:"started_at"`
+	DurationS int    `json:"duration_s"`
+}
+
+// playRecord wraps a proofOfPlayRecord with a local database ID
 // used for tracking sync state. The ID is not sent over the wire.
 type playRecord struct {
 	id  string // local SQLite primary key
-	rec types.ProofOfPlayRecord
+	rec proofOfPlayRecord
 }
 
 // PlayLogger records content item transitions and periodically flushes
@@ -104,10 +113,10 @@ func (pl *PlayLogger) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			// Final flush on shutdown.
-			pl.flush()
+			pl.Flush()
 			return
 		case <-ticker.C:
-			pl.flush()
+			pl.Flush()
 		}
 	}
 }
@@ -122,8 +131,9 @@ func (pl *PlayLogger) PendingCount() int {
 	return count
 }
 
-// flush sends a batch of unsynced records to the cloud and marks them synced.
-func (pl *PlayLogger) flush() {
+// Flush sends a batch of unsynced records to the cloud and marks them synced.
+// Exported so it can be called from OnConnect callbacks.
+func (pl *PlayLogger) Flush() {
 	locals, err := pl.loadUnsynced()
 	if err != nil {
 		slog.Error("playlog: loading unsynced records", "error", err)
@@ -134,7 +144,7 @@ func (pl *PlayLogger) flush() {
 	}
 
 	// Convert to wire-format records (no local ID).
-	wire := make([]types.ProofOfPlayRecord, len(locals))
+	wire := make([]proofOfPlayRecord, len(locals))
 	for i, l := range locals {
 		wire[i] = l.rec
 	}

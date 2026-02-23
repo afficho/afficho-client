@@ -111,7 +111,7 @@ func TestPlayLogFlushMarksRecordsSynced(t *testing.T) {
 	}
 
 	// Flush will fail to send (not connected) — records stay unsynced.
-	pl.flush()
+	pl.Flush()
 	if pl.PendingCount() != 1 {
 		t.Errorf("expected 1 still pending after failed flush, got %d", pl.PendingCount())
 	}

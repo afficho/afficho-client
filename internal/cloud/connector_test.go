@@ -228,3 +228,166 @@ func TestConnectorReconnects(t *testing.T) {
 		}
 	}
 }
+
+func TestConnectorDeviceID(t *testing.T) {
+	c := New(config.CloudConfig{}, "my-device-id", "dev", t.TempDir())
+	if got := c.DeviceID(); got != "my-device-id" {
+		t.Errorf("expected DeviceID 'my-device-id', got %q", got)
+	}
+}
+
+func TestConnectorInitialState(t *testing.T) {
+	c := New(config.CloudConfig{}, "dev-1", "dev", t.TempDir())
+
+	if c.Connected() {
+		t.Error("new connector should not be connected")
+	}
+	if !c.LastConnectedAt().IsZero() {
+		t.Error("new connector should have zero LastConnectedAt")
+	}
+}
+
+func TestConnectorConnectedState(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "")
+		// Read registration, then keep alive.
+		conn.Read(r.Context())
+		time.Sleep(500 * time.Millisecond)
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	c := New(config.CloudConfig{
+		Enabled:           true,
+		Endpoint:          wsURL,
+		DeviceKey:         "key",
+		ReconnectMaxDelay: 1,
+	}, "dev-1", "dev", t.TempDir())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	go c.Run(ctx)
+
+	// Wait until connected.
+	deadline := time.After(2 * time.Second)
+	for !c.Connected() {
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for Connected() to become true")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
+	if c.LastConnectedAt().IsZero() {
+		t.Error("expected non-zero LastConnectedAt after connection")
+	}
+}
+
+func TestConnectorOnConnectCallbacks(t *testing.T) {
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "")
+		conn.Read(r.Context())
+		time.Sleep(200 * time.Millisecond)
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	c := New(config.CloudConfig{
+		Enabled:           true,
+		Endpoint:          wsURL,
+		DeviceKey:         "key",
+		ReconnectMaxDelay: 1,
+	}, "dev-1", "dev", t.TempDir())
+
+	c.OnConnect(func() { callCount.Add(1) })
+	c.OnConnect(func() { callCount.Add(1) })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	go c.Run(ctx)
+
+	// Wait for callbacks to fire.
+	deadline := time.After(2 * time.Second)
+	for callCount.Load() < 2 {
+		select {
+		case <-deadline:
+			t.Fatalf("expected at least 2 callback invocations, got %d", callCount.Load())
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+}
+
+func TestConnectorDisconnectedAfterClose(t *testing.T) {
+	// Use a channel to signal the server to close the connection
+	// after we've observed the connected state.
+	closeConn := make(chan struct{})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		// Read registration, then wait for signal to close.
+		conn.Read(r.Context())
+		<-closeConn
+		conn.Close(websocket.StatusNormalClosure, "")
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	c := New(config.CloudConfig{
+		Enabled:           true,
+		Endpoint:          wsURL,
+		DeviceKey:         "key",
+		ReconnectMaxDelay: 30, // long delay so we can check disconnected state
+	}, "dev-1", "dev", t.TempDir())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go c.Run(ctx)
+
+	// Wait until connected.
+	deadline := time.After(2 * time.Second)
+	for !c.Connected() {
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for connection")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
+	// Now tell the server to close the connection.
+	close(closeConn)
+
+	// Wait until disconnected.
+	deadline = time.After(2 * time.Second)
+	for c.Connected() {
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for disconnection")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
+	// LastConnectedAt should still be set even after disconnect.
+	if c.LastConnectedAt().IsZero() {
+		t.Error("LastConnectedAt should persist after disconnect")
+	}
+}

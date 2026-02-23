@@ -19,6 +19,18 @@ import (
 	"github.com/afficho/afficho-client/web"
 )
 
+// CloudStatus provides cloud connection state for the status endpoint.
+type CloudStatus interface {
+	Connected() bool
+	LastConnectedAt() time.Time
+	DeviceID() string
+}
+
+// PendingCounter reports the number of pending proof-of-play records.
+type PendingCounter interface {
+	PendingCount() int
+}
+
 // Server is the HTTP API and admin UI server.
 type Server struct {
 	cfg       *config.Config
@@ -31,6 +43,9 @@ type Server struct {
 	mux       *chi.Mux
 	version   string
 	startedAt time.Time
+
+	cloudStatus    CloudStatus
+	pendingCounter PendingCounter
 }
 
 // SetUpdater attaches the auto-updater to the server so update status
@@ -44,6 +59,16 @@ func (s *Server) SetUpdater(u *updater.Updater) {
 // commands (reload, alert) from the cloud to the local display.
 func (s *Server) Hub() *Hub {
 	return s.hub
+}
+
+// SetCloudConnector attaches the cloud connector for the status API.
+func (s *Server) SetCloudConnector(cs CloudStatus) {
+	s.cloudStatus = cs
+}
+
+// SetPlayLogger attaches the play logger for pending count in the status API.
+func (s *Server) SetPlayLogger(pc PendingCounter) {
+	s.pendingCounter = pc
 }
 
 // NewServer wires up all routes and returns a ready-to-run Server.
@@ -182,6 +207,7 @@ func (s *Server) routes() {
 			r.Get("/scheduler/status", s.handleSchedulerStatus)
 			r.Post("/scheduler/next", s.handleSchedulerNext)
 			r.Get("/system", s.handleSystemInfo)
+			r.Get("/cloud/status", s.handleCloudStatus)
 			r.Get("/update/status", s.handleUpdateStatus)
 			r.Post("/update/check", s.handleUpdateCheck)
 		})
