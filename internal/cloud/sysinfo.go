@@ -28,8 +28,8 @@ func memUsedPct() float64 {
 	if err := unix.Sysinfo(&info); err != nil {
 		return 0
 	}
-	total := info.Totalram * uint64(info.Unit)
-	free := info.Freeram * uint64(info.Unit)
+	total := uint64(info.Totalram) * uint64(info.Unit)
+	free := uint64(info.Freeram) * uint64(info.Unit)
 	if total == 0 {
 		return 0
 	}
@@ -43,8 +43,8 @@ func diskUsedPct(path string) float64 {
 	if err := unix.Statfs(path, &stat); err != nil {
 		return 0
 	}
-	total := stat.Blocks * uint64(stat.Bsize)
-	free := stat.Bfree * uint64(stat.Bsize)
+	total := stat.Blocks * uint64(stat.Bsize) //nolint:unconvert // Bsize is int32 on 32-bit
+	free := stat.Bfree * uint64(stat.Bsize)   //nolint:unconvert
 	if total == 0 {
 		return 0
 	}
@@ -59,7 +59,7 @@ func storageUsedBytes(path string) int64 {
 	if err := unix.Statfs(path, &stat); err != nil {
 		return 0
 	}
-	total := int64(stat.Blocks) * stat.Bsize
-	free := int64(stat.Bfree) * stat.Bsize
+	total := int64(stat.Blocks) * int64(stat.Bsize)
+	free := int64(stat.Bfree) * int64(stat.Bsize)
 	return total - free
 }
