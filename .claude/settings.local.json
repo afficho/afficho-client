@@ -11,7 +11,12 @@
       "Bash(make test:*)",
       "Bash(ls:*)",
       "Bash(go test:*)",
-      "Bash(golangci-lint run:*)"
+      "Bash(golangci-lint run:*)",
+      "Bash(git ls-remote:*)",
+      "Bash(gh repo view:*)",
+      "Bash(GOPROXY=https://proxy.golang.org go list:*)",
+      "Bash(gh repo clone:*)",
+      "Bash(grep:*)"
     ]
   }
 }

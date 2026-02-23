@@ -39,6 +39,18 @@ func TestDefault(t *testing.T) {
 	if cfg.Admin.Password != "" {
 		t.Errorf("expected empty password, got %q", cfg.Admin.Password)
 	}
+	if cfg.Cloud.Enabled {
+		t.Error("expected cloud disabled by default")
+	}
+	if cfg.Cloud.Endpoint != "wss://cloud.afficho.io/ws/device" {
+		t.Errorf("expected cloud endpoint wss://cloud.afficho.io/ws/device, got %q", cfg.Cloud.Endpoint)
+	}
+	if cfg.Cloud.HeartbeatInterval != 30 {
+		t.Errorf("expected heartbeat interval 30, got %d", cfg.Cloud.HeartbeatInterval)
+	}
+	if cfg.Cloud.ReconnectMaxDelay != 300 {
+		t.Errorf("expected reconnect max delay 300, got %d", cfg.Cloud.ReconnectMaxDelay)
+	}
 }
 
 func TestServerAddr(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	types "github.com/afficho/afficho-types"
 	"github.com/coder/websocket"
 )
 
@@ -30,12 +31,8 @@ func (s *Server) handleDisplayWS(w http.ResponseWriter, r *http.Request) {
 
 	// Send the current item immediately so a freshly opened page
 	// doesn't have to wait for the next scheduler event.
-	item, ok := s.scheduler.Current()
-	var payload any
-	if ok {
-		payload = item
-	}
-	if err := writeMsg(r.Context(), conn, Message{Type: "current", Payload: payload}); err != nil {
+	msg := buildCurrentMessage(s)
+	if err := writeMsg(r.Context(), conn, msg); err != nil {
 		return
 	}
 
@@ -62,15 +59,24 @@ func (s *Server) handleDisplayWS(w http.ResponseWriter, r *http.Request) {
 // BroadcastCurrent reads the scheduler's current item and broadcasts a
 // "current" message to all connected display clients.
 func (s *Server) BroadcastCurrent() {
-	item, ok := s.scheduler.Current()
-	var payload any
-	if ok {
-		payload = item
-	}
-	s.hub.Broadcast(Message{Type: "current", Payload: payload})
+	s.hub.Broadcast(buildCurrentMessage(s))
 }
 
-func writeMsg(ctx context.Context, conn *websocket.Conn, msg Message) error {
+// buildCurrentMessage creates a WSMessage with the current scheduler item.
+func buildCurrentMessage(s *Server) types.WSMessage {
+	item, ok := s.scheduler.Current()
+	if !ok {
+		return types.WSMessage{Type: types.TypeCurrent}
+	}
+	payload, err := json.Marshal(item)
+	if err != nil {
+		slog.Error("ws: failed to marshal current item", "error", err)
+		return types.WSMessage{Type: types.TypeCurrent}
+	}
+	return types.WSMessage{Type: types.TypeCurrent, Payload: payload}
+}
+
+func writeMsg(ctx context.Context, conn *websocket.Conn, msg types.WSMessage) error {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return err

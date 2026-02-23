@@ -74,6 +74,22 @@ CREATE UNIQUE INDEX uq_default_playlist
 		      SELECT '00000000-0000-0000-0000-000000000001', 'Default', 1
 		      WHERE NOT EXISTS (SELECT 1 FROM playlists WHERE is_default = 1);`,
 	},
+	{
+		version:     4,
+		description: "add checksum and origin columns for cloud sync",
+		sql: `ALTER TABLE content_items ADD COLUMN checksum TEXT NOT NULL DEFAULT '';
+ALTER TABLE content_items ADD COLUMN origin TEXT NOT NULL DEFAULT 'local';`,
+	},
+	{
+		version:     5,
+		description: "add origin column to playlists for cloud sync",
+		sql:         `ALTER TABLE playlists ADD COLUMN origin TEXT NOT NULL DEFAULT 'local';`,
+	},
+	{
+		version:     6,
+		description: "add origin column to schedules for cloud sync",
+		sql:         `ALTER TABLE schedules ADD COLUMN origin TEXT NOT NULL DEFAULT 'local';`,
+	},
 }
 
 // migrate applies all pending migrations in order. It creates the

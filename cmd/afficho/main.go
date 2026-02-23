@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/afficho/afficho-client/internal/api"
+	"github.com/afficho/afficho-client/internal/cloud"
 	"github.com/afficho/afficho-client/internal/config"
 	"github.com/afficho/afficho-client/internal/content"
 	"github.com/afficho/afficho-client/internal/db"
@@ -94,6 +95,28 @@ func main() {
 		go upd.Run(ctx)
 	}
 
+	// ── Cloud connector ──────────────────────────────────────────────────
+	if cfg.Cloud.Enabled {
+		deviceID, err := database.DeviceID()
+		if err != nil {
+			slog.Error("failed to get device ID for cloud", "error", err)
+		} else {
+			cloudConn := cloud.New(cfg.Cloud, deviceID, version, cfg.Storage.DataDir)
+			cloud.NewContentSyncer(cloudConn, database, contentMgr)
+			cloud.NewPlaylistSyncer(cloudConn, database, sched)
+			cloud.NewScheduleSyncer(cloudConn, database, sched)
+
+			// Wrap the updater to satisfy cloud.UpdateTrigger (no return value).
+			var updTrigger cloud.UpdateTrigger
+			if upd != nil {
+				updTrigger = updaterShim{upd}
+			}
+			cloud.NewCommandHandler(cloudConn, server.Hub(), updTrigger, deviceID)
+
+			go cloudConn.Run(ctx)
+		}
+	}
+
 	// ── Screen power schedule ─────────────────────────────────────────────
 	if screenCtrl := display.NewScreenController(cfg); screenCtrl != nil {
 		go screenCtrl.Run(ctx)
@@ -115,6 +138,12 @@ func main() {
 
 	slog.Info("afficho-client stopped cleanly")
 }
+
+// updaterShim adapts *updater.Updater (whose CheckNow returns Status)
+// to the cloud.UpdateTrigger interface (CheckNow with no return).
+type updaterShim struct{ u *updater.Updater }
+
+func (s updaterShim) CheckNow() { s.u.CheckNow() }
 
 // handleSIGHUP listens for SIGHUP and reloads the config file. It updates
 // the live config pointer, adjusts the log level, and triggers a scheduler

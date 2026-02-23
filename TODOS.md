@@ -685,19 +685,146 @@ lightweight alternative to PPTX conversion.
 
 ---
 
-## Backlog / Cloud Sync (Afficho Cloud / EE)
+## Cloud Sync (Afficho Cloud / EE)
 
-No cloud backend exists yet. These items are parked until the cloud platform is built.
-See `afficho-cloud` repo (`TODOS.md`) for the full cloud implementation plan.
-See `afficho-types` repo (`TODOS.md`) for the shared wire-format types.
+Cloud backend exists in `afficho-cloud` repo. These items enable the client to
+connect to the cloud for fleet management, content distribution, and remote control.
+Shared wire-format types are in `afficho-types` repo.
 
-- [ ] Generate stable device ID on first run (UUIDv4, stored in `device_meta`)
-- [ ] Device registration: POST device info (ID, hostname, IP, arch, version) to cloud
-- [ ] Heartbeat: periodic POST with current status (playing item, uptime, storage)
-- [ ] Receive updates from cloud: new playlist, new content URLs, config changes
-- [ ] Content download: fetch from cloud-provided signed URLs → local media cache
-- [ ] Auth token storage in `device_meta`, refresh before expiry
-- [ ] Offline resilience: operate fully from local DB when cloud is unreachable
-- [ ] `GET /api/v1/cloud/status` — device ID, last sync, connection state
-- [ ] Protocol: WebSocket (persistent, bidirectional) — reuse the message envelope
-  from Phase 3; cloud sends same `current` / `alert` / `reload` messages
+### CS-1 — Shared types migration
+
+- [x] Import `github.com/afficho/afficho-types` in `go.mod`
+- [x] Replace `api.Message` (`internal/api/hub.go`) with `types.WSMessage`
+  - `api.Message.Payload` is `any`; `types.WSMessage.Payload` is `json.RawMessage`
+  - Update `writeMsg()`, `BroadcastCurrent()`, and `handleDisplayWS()` accordingly
+  - Update hub's `Broadcast()` to accept `types.WSMessage`
+- [x] Use `types.Type*` constants instead of bare strings (`"current"`, `"reload"`, etc.)
+
+### CS-2 — Config & device identity
+
+- [x] Add `[cloud]` config section:
+  ```toml
+  [cloud]
+  enabled = false
+  endpoint = "wss://cloud.afficho.io/ws/device"
+  device_key = ""           # device key from cloud console registration
+  heartbeat_interval = 30   # seconds
+  reconnect_max_delay = 300 # max backoff in seconds
+  ```
+- [x] Add `CloudConfig` to `internal/config/config.go`
+- [x] Generate stable device ID on first run (UUIDv4, stored in `device_meta` table)
+- [x] Read device ID from `device_meta` on subsequent runs
+
+### CS-3 — Cloud connector
+
+`internal/cloud/connector.go` — persistent WebSocket to cloud.
+
+- [x] Connect to cloud endpoint with `Authorization: Bearer <device_key>` header
+- [x] Reconnect with exponential backoff (1s → 2s → 4s → ... → `reconnect_max_delay`)
+- [x] On connect: send `types.TypeRegister` message with `types.DeviceRegistration` payload
+  (device ID, hostname, arch, OS version, app version, local IP)
+- [x] Message dispatch: route incoming `types.WSMessage` by type to handlers
+- [x] On disconnect: log warning, start reconnect loop
+- [x] Graceful shutdown: close WebSocket on SIGINT/SIGTERM
+
+### CS-4 — Heartbeat
+
+- [x] Send `types.TypeHeartbeat` message with `types.Heartbeat` payload every
+  `cloud.heartbeat_interval` seconds over the existing WebSocket
+- [x] Include: device ID, current item ID, playlist ID, uptime, CPU temp,
+  memory/disk usage, storage used, screen state, timestamp
+- [x] Handle `types.TypeHeartbeatAck` response (may carry pending commands)
+
+### CS-5 — Content sync handler
+
+`internal/cloud/content.go` — receive and cache content from cloud.
+
+- [x] Handle `types.TypeSyncContent` message: receive list of `types.ContentSyncItem`
+- [x] Compare checksums with local media cache:
+  - Already cached + checksum matches → skip
+  - New or changed → download from signed URL, verify SHA-256 checksum
+  - Present locally but absent from manifest → delete (cloud removed it)
+- [x] Download with timeout + context propagation (addresses existing TODO in
+  `internal/content/manager.go:65`)
+- [x] Send `types.TypeSyncAck` with `types.SyncAck{SyncType: "content"}` on completion
+- [x] Store cloud-synced content in the existing `content_items` table
+  with an `origin = 'cloud'` column to distinguish from locally-created content
+
+### CS-6 — Playlist sync handler
+
+`internal/cloud/playlist.go` — receive playlists from cloud.
+
+- [x] Handle `types.TypeSyncPlaylist` message: receive `[]types.PlaylistSync` payload
+- [x] Upsert playlist + items in local SQLite (transactional replace)
+- [x] Flag cloud-pushed playlists as `origin = 'cloud'` in the DB
+  (prevents local admin UI from editing cloud-managed playlists)
+- [x] Cloud always wins: on conflict, cloud state replaces local state
+  for `origin = 'cloud'` playlists
+- [x] Device retains local playlists (`origin = 'local'`) for offline operation
+- [x] Trigger `scheduler.TriggerReload()` after sync
+- [x] Send `types.TypeSyncAck` with `types.SyncAck{SyncType: "playlist"}` on completion
+
+### CS-7 — Schedule sync handler
+
+`internal/cloud/schedule.go` — receive schedules from cloud.
+
+- [x] Handle `types.TypeSyncSchedule` message: receive `[]types.ScheduleSync` payload
+- [x] Upsert schedule definitions in local SQLite
+- [x] Flag as `origin = 'cloud'` (same pattern as playlists)
+- [x] Validate cron expressions with `scheduler.ParseTimeWindow()` before storing
+- [x] Trigger `scheduler.TriggerReload()` after sync
+- [x] Send `types.TypeSyncAck` with `types.SyncAck{SyncType: "schedule"}` on completion
+
+### CS-8 — Command handler
+
+- [x] Handle `types.TypeCommand` message: receive `types.DeviceCommand` payload
+- [x] Dispatch commands:
+  - `reload` → broadcast `types.TypeReload` to display WebSocket
+  - `reboot` → execute system reboot (3s delay, systemctl fallback)
+  - `update` → trigger self-update via `internal/updater/`
+  - `screenshot` → capture screen (scrot/import/xwd), send base64
+    `types.ScreenshotResponse` back as `types.TypeScreenshot` message
+
+### CS-9 — Cloud alert handling
+
+- [ ] Handle `types.TypeAlert` message: receive `types.AlertMessage` payload
+  → broadcast to local display WebSocket (reuses existing alert rendering)
+- [ ] Handle `types.TypeClearAlert` message → broadcast clear to local display
+
+### CS-10 — Proof of play logger
+
+`internal/cloud/playlog.go` — record and report content playback.
+
+- [ ] Record content item transitions: content ID, start time, actual duration played
+- [ ] Store records in a local SQLite table (`proof_of_play`)
+- [ ] Batch and send to cloud periodically as `types.TypeProofOfPlay` message
+  with `types.ProofOfPlayReport` payload
+- [ ] If offline: accumulate locally, flush on reconnect
+- [ ] Configurable batch size and send interval
+
+### CS-11 — Offline resilience
+
+- [ ] Operate fully from local DB when cloud is unreachable
+- [ ] On reconnect: cloud re-evaluates and pushes resolved state
+  (playlists, schedules, content manifest)
+- [ ] Flush pending proof-of-play records on reconnect
+- [ ] `GET /api/v1/cloud/status` — device ID, cloud connection state,
+  last sync timestamp, pending proof-of-play count
+
+### CS-12 — DB schema changes
+
+- [ ] Add `source` column (`TEXT DEFAULT 'local'`) to `playlists` table
+  (values: `'local'`, `'cloud'`)
+- [ ] Add `source` column (`TEXT DEFAULT 'local'`) to `content_items` table
+- [ ] Add `source` column (`TEXT DEFAULT 'local'`) to `schedules` table
+- [ ] Create `proof_of_play` table:
+  ```sql
+  CREATE TABLE proof_of_play (
+      id TEXT PRIMARY KEY,
+      content_id TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      duration_s INTEGER NOT NULL,
+      synced BOOLEAN DEFAULT FALSE
+  );
+  ```
+- [ ] Migration to add new columns and table

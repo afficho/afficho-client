@@ -39,6 +39,13 @@ func (s *Server) SetUpdater(u *updater.Updater) {
 	s.updater = u
 }
 
+// Hub returns the WebSocket broadcast hub for sending messages to
+// connected display clients. Used by the cloud connector to relay
+// commands (reload, alert) from the cloud to the local display.
+func (s *Server) Hub() *Hub {
+	return s.hub
+}
+
 // NewServer wires up all routes and returns a ready-to-run Server.
 func NewServer(
 	cfg *config.Config,

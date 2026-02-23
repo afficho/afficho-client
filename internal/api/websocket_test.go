@@ -1,8 +1,11 @@
 package api
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
+
+	types "github.com/afficho/afficho-types"
 )
 
 func TestHubNewEmpty(t *testing.T) {
@@ -43,14 +46,15 @@ func TestHubBroadcast(t *testing.T) {
 	defer h.unregister(c1)
 	defer h.unregister(c2)
 
-	msg := Message{Type: "current", Payload: map[string]string{"id": "test"}}
+	payload, _ := json.Marshal(map[string]string{"id": "test"})
+	msg := types.WSMessage{Type: types.TypeCurrent, Payload: payload}
 	h.Broadcast(msg)
 
 	// Both clients should receive the message.
 	select {
 	case got := <-c1.msgs:
-		if got.Type != "current" {
-			t.Errorf("c1: expected type current, got %q", got.Type)
+		if got.Type != types.TypeCurrent {
+			t.Errorf("c1: expected type %q, got %q", types.TypeCurrent, got.Type)
 		}
 	case <-time.After(time.Second):
 		t.Error("c1: timed out waiting for message")
@@ -58,8 +62,8 @@ func TestHubBroadcast(t *testing.T) {
 
 	select {
 	case got := <-c2.msgs:
-		if got.Type != "current" {
-			t.Errorf("c2: expected type current, got %q", got.Type)
+		if got.Type != types.TypeCurrent {
+			t.Errorf("c2: expected type %q, got %q", types.TypeCurrent, got.Type)
 		}
 	case <-time.After(time.Second):
 		t.Error("c2: timed out waiting for message")
@@ -73,11 +77,13 @@ func TestHubBroadcastDropsForSlowClient(t *testing.T) {
 
 	// Fill the client's buffer (capacity 16).
 	for i := range 16 {
-		h.Broadcast(Message{Type: "current", Payload: i})
+		payload, _ := json.Marshal(i)
+		h.Broadcast(types.WSMessage{Type: types.TypeCurrent, Payload: payload})
 	}
 
 	// Next broadcast should be dropped (not block).
-	h.Broadcast(Message{Type: "current", Payload: "overflow"})
+	payload, _ := json.Marshal("overflow")
+	h.Broadcast(types.WSMessage{Type: types.TypeCurrent, Payload: payload})
 
 	// Drain and count — should be exactly 16 (the overflow was dropped).
 	count := 0

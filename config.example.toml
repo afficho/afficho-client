@@ -60,11 +60,18 @@ max_upload_mb = 100
 # upload_concurrency_limit = 2
 
 [cloud]
-# Afficho Cloud sync (not yet implemented).
+# Afficho Cloud connection. When enabled, the daemon connects to the cloud
+# WebSocket and receives remote playlists, content, commands, and alerts.
+# The device ID is auto-generated on first run and stored in the database.
 enabled = false
-endpoint = "https://api.afficho.io"
-device_id = ""
-token = ""
+endpoint = "wss://cloud.afficho.io/ws/device"
+# Device key issued by the cloud console during device registration.
+device_key = ""
+# How often to send a heartbeat to the cloud (seconds).
+heartbeat_interval = 30
+# Maximum reconnect backoff delay (seconds). The connector uses exponential
+# backoff: 1s → 2s → 4s → ... up to this ceiling.
+reconnect_max_delay = 300
 
 [update]
 # Automatic updates from GitHub releases. Disabled by default.

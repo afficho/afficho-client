@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/subtle"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	types "github.com/afficho/afficho-types"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
@@ -789,10 +791,9 @@ func (s *Server) adminDisplaySettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Broadcast to all live display clients so they update in real time.
-	s.hub.Broadcast(Message{
-		Type:    "settings",
-		Payload: map[string]any{"show_progress_bar": enabled},
-	})
+	if payload, err := json.Marshal(map[string]any{"show_progress_bar": enabled}); err == nil {
+		s.hub.Broadcast(types.WSMessage{Type: types.TypeSettings, Payload: payload})
+	}
 
 	s.adminRedirect(w, r, "/admin", "success", "Display settings saved")
 }

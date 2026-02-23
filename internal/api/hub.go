@@ -3,18 +3,13 @@ package api
 import (
 	"log/slog"
 	"sync"
-)
 
-// Message is the WebSocket message envelope sent to display clients.
-// The same format is used for local WebSocket and (future) cloud-pushed messages.
-type Message struct {
-	Type    string `json:"type"`
-	Payload any    `json:"payload,omitempty"`
-}
+	types "github.com/afficho/afficho-types"
+)
 
 // wsClient is a single connected display WebSocket.
 type wsClient struct {
-	msgs chan Message
+	msgs chan types.WSMessage
 }
 
 // Hub tracks all connected display WebSocket clients and broadcasts
@@ -34,7 +29,7 @@ func newHub() *Hub {
 // unregister when the connection closes.
 func (h *Hub) register() *wsClient {
 	c := &wsClient{
-		msgs: make(chan Message, 16),
+		msgs: make(chan types.WSMessage, 16),
 	}
 	h.mu.Lock()
 	h.clients[c] = struct{}{}
@@ -54,7 +49,7 @@ func (h *Hub) unregister(c *wsClient) {
 
 // Broadcast sends a message to every connected client.
 // Slow clients that can't keep up have their message dropped.
-func (h *Hub) Broadcast(msg Message) {
+func (h *Hub) Broadcast(msg types.WSMessage) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 

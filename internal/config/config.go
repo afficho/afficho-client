@@ -65,11 +65,15 @@ type SecurityConfig struct {
 	UploadConcurrencyLimit int `toml:"upload_concurrency_limit"`
 }
 
+// CloudConfig controls the connection to the Afficho Cloud backend.
+// When Enabled is true, the daemon connects to the cloud WebSocket endpoint
+// and receives remote playlists, content, commands, and alerts.
 type CloudConfig struct {
-	Enabled  bool   `toml:"enabled"`
-	Endpoint string `toml:"endpoint"`
-	DeviceID string `toml:"device_id"`
-	Token    string `toml:"token"`
+	Enabled            bool   `toml:"enabled"`
+	Endpoint           string `toml:"endpoint"`
+	DeviceKey          string `toml:"device_key"`
+	HeartbeatInterval  int    `toml:"heartbeat_interval"`  // seconds
+	ReconnectMaxDelay  int    `toml:"reconnect_max_delay"` // seconds
 }
 
 // UpdateConfig controls automatic updates from GitHub releases.
@@ -107,6 +111,12 @@ func Default() *Config {
 		},
 		Security: SecurityConfig{
 			UploadConcurrencyLimit: 2,
+		},
+		Cloud: CloudConfig{
+			Enabled:           false,
+			Endpoint:          "wss://cloud.afficho.io/ws/device",
+			HeartbeatInterval: 30,
+			ReconnectMaxDelay: 300,
 		},
 		Update: UpdateConfig{
 			Enabled:       false,
