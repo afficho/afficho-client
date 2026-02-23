@@ -90,6 +90,17 @@ ALTER TABLE content_items ADD COLUMN origin TEXT NOT NULL DEFAULT 'local';`,
 		description: "add origin column to schedules for cloud sync",
 		sql:         `ALTER TABLE schedules ADD COLUMN origin TEXT NOT NULL DEFAULT 'local';`,
 	},
+	{
+		version:     7,
+		description: "create proof_of_play table",
+		sql: `CREATE TABLE proof_of_play (
+    id         TEXT PRIMARY KEY,
+    content_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    duration_s INTEGER NOT NULL,
+    synced     INTEGER NOT NULL DEFAULT 0
+);`,
+	},
 }
 
 // migrate applies all pending migrations in order. It creates the

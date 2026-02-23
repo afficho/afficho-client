@@ -112,6 +112,24 @@ func main() {
 				updTrigger = updaterShim{upd}
 			}
 			cloud.NewCommandHandler(cloudConn, server.Hub(), updTrigger, deviceID)
+			cloud.NewAlertHandler(cloudConn, server.Hub())
+
+			// Proof-of-play logger: chain into scheduler's OnChange to
+			// record item transitions, run flush loop in background.
+			playLog := cloud.NewPlayLogger(cloudConn, database)
+			prevOnChange := sched.OnChange
+			sched.OnChange = func() {
+				item, ok := sched.Current()
+				itemID := ""
+				if ok {
+					itemID = item.ID
+				}
+				playLog.RecordTransition(itemID)
+				if prevOnChange != nil {
+					prevOnChange()
+				}
+			}
+			go playLog.Run(ctx)
 
 			go cloudConn.Run(ctx)
 		}

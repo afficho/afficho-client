@@ -787,20 +787,20 @@ Shared wire-format types are in `afficho-types` repo.
 
 ### CS-9 — Cloud alert handling
 
-- [ ] Handle `types.TypeAlert` message: receive `types.AlertMessage` payload
+- [x] Handle `types.TypeAlert` message: receive `types.AlertMessage` payload
   → broadcast to local display WebSocket (reuses existing alert rendering)
-- [ ] Handle `types.TypeClearAlert` message → broadcast clear to local display
+- [x] Handle `types.TypeClearAlert` message → broadcast clear to local display
 
 ### CS-10 — Proof of play logger
 
 `internal/cloud/playlog.go` — record and report content playback.
 
-- [ ] Record content item transitions: content ID, start time, actual duration played
-- [ ] Store records in a local SQLite table (`proof_of_play`)
-- [ ] Batch and send to cloud periodically as `types.TypeProofOfPlay` message
-  with `types.ProofOfPlayReport` payload
-- [ ] If offline: accumulate locally, flush on reconnect
-- [ ] Configurable batch size and send interval
+- [x] Record content item transitions: content ID, start time, actual duration played
+- [x] Store records in a local SQLite table (`proof_of_play`)
+- [x] Batch and send to cloud periodically as `types.TypeProofOfPlay` message
+  (uses local `ProofOfPlayRecord` type — promote to `afficho-types` when ready)
+- [x] If offline: accumulate locally, retry on next flush cycle
+- [x] Configurable batch size (default 50) and send interval (default 60s)
 
 ### CS-11 — Offline resilience
 
