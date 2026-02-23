@@ -14,9 +14,10 @@ data/
 *.out
 coverage.out
 
-# Editor
+# Editor / AI tools
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 
