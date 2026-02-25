@@ -173,6 +173,8 @@ func (s *Server) routes() {
 		r.Post("/admin/schedules/create", s.adminScheduleCreate)
 		r.Delete("/admin/schedules/{id}/delete", s.adminScheduleDelete)
 		r.Post("/admin/display/settings", s.adminDisplaySettings)
+		r.Post("/admin/alert/send", s.adminAlertSend)
+		r.Post("/admin/alert/clear", s.adminAlertClear)
 
 		// REST API
 		r.Route("/api/v1", func(r chi.Router) {

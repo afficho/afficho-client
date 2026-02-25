@@ -769,6 +769,52 @@ func typeIcon(t string) string {
 	}
 }
 
+// ── Emergency alerts ─────────────────────────────────────────────────────────
+
+// adminAlertSend broadcasts an alert to all connected display clients.
+func (s *Server) adminAlertSend(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	text := strings.TrimSpace(r.FormValue("text"))
+	urgency := r.FormValue("urgency")
+	ttlStr := r.FormValue("ttl_s")
+
+	if text == "" {
+		s.adminRedirect(w, r, "/admin", "error", "Alert text is required")
+		return
+	}
+
+	switch urgency {
+	case "info", "warning", "critical":
+		// valid
+	default:
+		urgency = "warning"
+	}
+
+	ttl, _ := strconv.Atoi(ttlStr)
+	if ttl < 0 {
+		ttl = 30
+	}
+
+	alert := types.AlertMessage{Text: text, TTLS: ttl, Urgency: urgency}
+	payload, err := json.Marshal(alert)
+	if err != nil {
+		slog.Error("admin: marshalling alert", "error", err)
+		s.adminRedirect(w, r, "/admin", "error", "Failed to send alert")
+		return
+	}
+
+	s.hub.Broadcast(types.WSMessage{Type: types.TypeAlert, Payload: payload})
+	slog.Info("admin: alert sent", "text", text, "urgency", urgency, "ttl_s", ttl)
+	s.adminRedirect(w, r, "/admin", "success", "Alert sent to displays")
+}
+
+// adminAlertClear broadcasts a clear_alert to all connected display clients.
+func (s *Server) adminAlertClear(w http.ResponseWriter, r *http.Request) {
+	s.hub.Broadcast(types.WSMessage{Type: types.TypeClearAlert, Payload: json.RawMessage(`{}`)})
+	slog.Info("admin: alert cleared")
+	s.adminRedirect(w, r, "/admin", "success", "Alert cleared")
+}
+
 // ── Display settings ────────────────────────────────────────────────────────
 
 // adminDisplaySettings toggles display preferences (progress bar) and broadcasts
