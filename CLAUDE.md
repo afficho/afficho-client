@@ -7,6 +7,8 @@ Runs on Raspberry Pi / Linux. Manages content, drives a Chromium kiosk via HTTP,
 and exposes a local admin UI + REST API.
 
 Open work is tracked as [GitHub Issues](https://github.com/afficho/afficho-client/issues).
+When asked to implement an issue by number (e.g. "implement #3"), use `gh issue view 3`
+to fetch the full description, acceptance criteria, and labels before starting work.
 
 ## Environment
 
